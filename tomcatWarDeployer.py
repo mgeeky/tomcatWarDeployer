@@ -173,13 +173,15 @@ def invokeApplication(browser, url, appname):
     return False
 
 def deployApplication(browser, url, appname, warpath):
-
     logging.info('Deploying application: %s from file: "%s"' % (appname, warpath))
     resp = browser.open(url)
     for form in browser.forms():
         if url in form.action and '/upload?' in form.action:
-            print 'OK: ' + form.action
+            browser.form = form
+            browser.form.add_file(open(warpath, 'rb'), 'application/octet-stream', appname+'.war')
+            browser.submit()
 
+            checkIsDeployed(browser, url, appname)
             return True
 
     return False
