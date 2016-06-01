@@ -21,6 +21,7 @@
 
 import mechanize
 import os
+import urllib
 import urllib2
 import sys
 import random
@@ -85,6 +86,11 @@ Created-By: %s
     os.chdir(cwd)
 
     print packing[1]
+
+    tree = commands.getstatusoutput('tree %s' % dirpath)[1]
+    if not ('sh' in tree and 'tree: not found' in tree):
+        logging.info('WAR file structure:')
+        print tree
 
     return (dirpath, outpath)
 
@@ -158,6 +164,7 @@ def invokeApplication(browser, url, appname):
 
     try:
         resp = browser.open(appurl)
+        logging.info('Application returned:')
         print '-' * 40
         print resp.read()
         print '-' * 40
@@ -176,7 +183,8 @@ def deployApplication(browser, url, appname, warpath):
     logging.info('Deploying application: %s from file: "%s"' % (appname, warpath))
     resp = browser.open(url)
     for form in browser.forms():
-        if url in form.action and '/upload?' in form.action:
+        action = urllib.unquote_plus(form.action)
+        if url in action and '/upload?' in action:
             browser.form = form
             browser.form.add_file(open(warpath, 'rb'), 'application/octet-stream', appname+'.war')
             browser.submit()
@@ -187,8 +195,10 @@ def deployApplication(browser, url, appname, warpath):
     return False
 
 def checkIsDeployed(browser, url, appname):
+    browser.open(url)
     for form in browser.forms():
-        if url in form.action and '/undeploy?path=/'+appname+'&' in form.action:
+        action = urllib.unquote_plus(form.action)
+        if url in action and '/undeploy?path=/'+appname in action:
             return True
 
     return False
@@ -197,13 +207,15 @@ def unloadApplication(browser, url, appname):
     appurl = 'http://%s/%s/' % (url, appname)
     logging.info('Unloading application: "%s"' % appurl)
     for form in browser.forms():
-        if url in form.action and '/undeploy?path=/'+appname+'&' in form.action:
-            resp = form.submit()
+        action = urllib.unquote_plus(form.action)
+        if url in action and '/undeploy?path=/'+appname in action:
+            browser.form = form
+            resp = browser.submit()
             content = resp.read()
 
             try:
                 resp = browser.open(appurl)
-            except HTTPError, e:
+            except urllib2.HTTPError, e:
                 if e.code == 404:
                     return True
 
@@ -214,7 +226,8 @@ def validateManagerApplication(browser):
     actions = ('stop', 'start', 'deploy', 'undeploy', 'upload', 'expire', 'reload')
     for form in browser.forms():
         for a in actions:
-            if '/'+a+'?' in form.action:
+            action = urllib.unquote_plus(form.action)
+            if '/'+a+'?' in action:
                 found += 1
 
     return (found >= len(actions))
