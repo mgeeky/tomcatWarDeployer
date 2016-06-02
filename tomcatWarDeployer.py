@@ -11,13 +11,18 @@
 #
 # In other words - automatic Tomcat WAR deployment pwning tool.
 #
+# NOTICE:
+#   Shell providing functionality (bind&reverse) comes from the Rapid7 Metasploit-Framework, 
+#   which in turn was based on the code coming from: http://www.security.org.sg/code/jspreverse.html.
+#   In order to refer to the original source, please look at the Metasploit core lib.
+#   On Linux instances the file can be found at:
+#       /usr/share/metasploit-framework/lib/msf/core/payload/jsp.rb
 #
 # Currently tested on:
 #  Apache Tomcat/7.0.52 (Ubuntu)
 #
 # Mariusz B. / MGeeky, '16
 #
-
 
 import mechanize
 import os
