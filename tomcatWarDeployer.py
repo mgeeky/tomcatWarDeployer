@@ -512,9 +512,8 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
 def main():
     (opts, args) = options()
 
-    url = 'http://%s%s' % (args[0], opts.url)
-
     if not opts.generate:
+        url = 'http://%s%s' % (args[0], opts.url)
         browser = browseToManager(url, opts.user, opts.password)
         if browser == None:
             return
@@ -528,9 +527,10 @@ def main():
                 (dirpath, warpath) = generateWAR(code, opts.title, opts.appname)
 
                 if opts.generate:
+                    os.rename(warpath, opts.generate)
                     logger.debug('Removing temporary WAR directory: "%s"' % dirpath)
                     shutil.rmtree(dirpath)
-                    logging.info('JSP WAR backdoor has been generated and stored at: "%s"' % warpath)
+                    logging.info('JSP WAR backdoor has been generated and stored at: "%s"' % opts.generate)
                     return
 
             else:
