@@ -447,7 +447,7 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
 
     general = optparse.OptionGroup(parser, 'General options')
     general.add_option('-v', '--verbose', dest='verbose', help='Verbose mode.', action='store_true')
-    general.add_option('-G', '--generate', metavar='OUTFILE', dest='generate', help='Generate JSP backdoor only and put it into specified outfile path then exit. Do not perform any connections, scannings and so on.')
+    general.add_option('-G', '--generate', metavar='OUTFILE', dest='generate', help='Generate JSP backdoor only and put it into specified outfile path then exit. Do not perform any connections, scannings, deployment and so on.')
     general.add_option('-U', '--user', metavar='USER', dest='user', default='tomcat', help='Tomcat Manager Web Application HTTP Auth username. Default="tomcat"')
     general.add_option('-P', '--pass', metavar='PASS', dest='password', default='tomcat', help='Tomcat Manager Web Application HTTP Auth password. Default="tomcat"')
     parser.add_option_group(general)
