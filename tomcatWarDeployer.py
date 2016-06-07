@@ -447,6 +447,7 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
 
     general = optparse.OptionGroup(parser, 'General options')
     general.add_option('-v', '--verbose', dest='verbose', help='Verbose mode.', action='store_true')
+    general.add_option('-G', '--generate', metavar='OUTFILE', dest='generate', help='Generate JSP backdoor only and put it into specified outfile path then exit. Do not perform any connections, scannings and so on.')
     general.add_option('-U', '--user', metavar='USER', dest='user', default='tomcat', help='Tomcat Manager Web Application HTTP Auth username. Default="tomcat"')
     general.add_option('-P', '--pass', metavar='PASS', dest='password', default='tomcat', help='Tomcat Manager Web Application HTTP Auth password. Default="tomcat"')
     parser.add_option_group(general)
@@ -487,6 +488,13 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
     if opts.remove_appname and (opts.host or opts.port or opts.file):
         logging.warning('Removing previously deployed package, any further actions will not be undertaken.')
 
+    if opts.generate:
+        if opts.file:
+            logging.error('Custom JSP WAR file has been specified. Mutually exclusive with generate-only function.')
+            sys.exit(0)
+
+        logging.warning('Will generate JSP backdoor and store it into specified output path only.')
+
     if opts.file and not os.path.exists(file):
         logger.error('Specified WAR file does not exists in local filesystem.')
         sys.exit(0)
@@ -503,9 +511,11 @@ def main():
     (opts, args) = options()
 
     url = 'http://%s%s' % (args[0], opts.url)
-    browser = browseToManager(url, opts.user, opts.password)
-    if browser == None:
-        return
+
+    if not opts.generate:
+        browser = browseToManager(url, opts.user, opts.password)
+        if browser == None:
+            return
 
     try:
         appname = opts.appname
@@ -514,6 +524,13 @@ def main():
             if not opts.file:
                 code = preparePayload(opts)
                 (dirpath, warpath) = generateWAR(code, opts.title, opts.appname)
+
+                if opts.generate:
+                    logger.debug('Removing temporary WAR directory: "%s"' % dirpath)
+                    shutil.rmtree(dirpath)
+                    logging.info('JSP WAR backdoor has been generated and stored at: "%s"' % warpath)
+                    return
+
             else:
                 warpath = opts.file
         else:
