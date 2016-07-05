@@ -454,7 +454,7 @@ def generateRandomPassword(N=12):
 
 def options():
     print '''
-    Apache Tomcat auto WAR deployment & launching tool
+    Apache Tomcat 6/7 auto WAR deployment & launching tool
     Mariusz B. / MGeeky '16
 
 Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
