@@ -512,6 +512,10 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
 def main():
     (opts, args) = options()
 
+    if len(args) < 1:
+        logging.error('One shall not go any further without an url!')
+        return
+
     if not opts.generate:
         url = 'http://%s%s' % (args[0], opts.url)
         browser = browseToManager(url, opts.user, opts.password)
