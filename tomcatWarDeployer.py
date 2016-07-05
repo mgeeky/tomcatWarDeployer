@@ -590,7 +590,7 @@ def main():
                 logger.warning('Please use -x (--unload) option to force existing application unloading.')
                 return
         else:
-            logger.debug('It looks that the application with specified name "%s" has not been deployed yet.' % opts.appname)
+            logger.info('It looks that the application with specified name "%s" has not been deployed yet.' % opts.appname)
 
             if opts.remove_appname:
                 return 
