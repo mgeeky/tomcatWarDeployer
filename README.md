@@ -13,7 +13,7 @@ Here goes the help:
 ```
 user$ python tomcatWarDeployer.py --help
 
-Apache Tomcat auto WAR deployment & launching tool
+Apache Tomcat 6/7 auto WAR deployment & launching tool
     Mariusz B. / MGeeky '16
 
 Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
@@ -27,6 +27,8 @@ Options:
 
   General options:
     -v, --verbose       Verbose mode.
+    -s, --simulate      Simulate breach only, do not perform any offensive
+                        actions.
     -G OUTFILE, --generate=OUTFILE
                         Generate JSP backdoor only and put it into specified
                         outfile path then exit. Do not perform any
