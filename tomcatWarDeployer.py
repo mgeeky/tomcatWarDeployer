@@ -408,17 +408,34 @@ def browseToManager(url, user, password):
     browser.set_handle_robots(False)
     browser.add_password(url, user, password)
 
+    error = None
+    retry = False
+    page = None
     try:
         page = browser.open(url)
     except urllib2.URLError, e:
-        if 'Connection refused' in str(e):
+        error = str(e)
+        try:
+            logger.debug('Failed with /manager/ trying with /manager/html')
+            page = browser.open(url + 'html')
+            logger.debug('Succeeded, most likely dealing with Tomcat6.')
+            error = None
+        except urllib2.URLError, e:
+            if '403' in str(e):
+                logger.debug('Got 403, most likely dealing with Tomcat6.')
+                logger.error('Invalid credentials supplied for Apache Tomcat.')
+                pass
+            else:
+                error = str(e)
+
+    if error != None:
+        if 'Connection refused' in error:
             logger.error('Could not connect with "%s", connection refused.' % url)
-        elif 'Error 404' in str(e):
-            logger.error('Server returned 404 Not Found on specified URL: %s' % url)
-        elif 'Error 401' in str(e):
+        elif 'Error 401' in error:
             logger.error('Invalid credentials supplied for Apache Tomcat.')
         else:
-            logger.error('Browsing to the server (%s) failed: %s' % (url, e))
+            logger.error('Browsing to the server (%s) failed: \n\t%s' % (url, e))
+
         return None
 
     src = page.read()
