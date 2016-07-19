@@ -436,6 +436,8 @@ def browseToManager(url, user, password):
             logger.error('Invalid credentials supplied for Apache Tomcat.')
         else:
             logger.error('Browsing to the server (%s) failed: \n\t%s' % (url, e))
+            if ':' not in url[url.find('://')+3:]:
+                logger.warning('Did you forgot to specify service port in the host argument (host:port)?')
 
         return None, None
 
@@ -568,7 +570,7 @@ def main():
                 logging.info("Removing previously deployed WAR application with name: '%s'" % opts.remove_appname)
                 if not opts.simulate:
                     if removeApplication(browser, url, opts.remove_appname):
-                        logging.info('Succeeded. Hasta la vista!')
+                        logger.info("\033[0;32miSucceeded. Hasta la vista!\033[1;0m")
                     else:
                         logging.error("Removal failed miserably!")
                 else:
