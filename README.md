@@ -160,6 +160,11 @@ Summing up, user has spawned WEB application providing WEB backdoor, authenticat
 
 That would be all I guess. 
 
+
+### CHANGELOG
+* 19.07.16: Version 0.3: Added bind-shell & Reverse-shell functionality to provide user with direct access to the shell.
+
+
 ### TODO
 
 * ~~Implement bind & reverse tcp payload functionality as well as some pty to interact with it~~
