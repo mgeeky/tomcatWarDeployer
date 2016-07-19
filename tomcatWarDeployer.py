@@ -41,6 +41,8 @@ import logging
 import commands
 from BeautifulSoup import BeautifulSoup
 
+VERSION='0.3'
+
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 logging.addLevelName( logging.DEBUG, "\033[1;32m%s\033[1;0m" % logging.getLevelName(logging.DEBUG))
 logging.addLevelName( logging.WARNING, "\033[1;35m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
@@ -456,11 +458,12 @@ def generateRandomPassword(N=12):
 
 def options():
     print '''
+    tomcatWarDeployer (v. %s)
     Apache Tomcat 6/7 auto WAR deployment & launching tool
     Mariusz B. / MGeeky '16
 
 Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
-    ''' 
+    ''' % VERSION
 
     usage = '%prog [options] server\n\n  server\t\tSpecifies server address. Please also include port after colon.'
     parser = optparse.OptionParser(usage=usage)
