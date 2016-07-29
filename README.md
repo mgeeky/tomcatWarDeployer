@@ -13,7 +13,7 @@ Here goes the help:
 ```
 user$ python tomcatWarDeployer.py --help
 
-    tomcatWarDeployer (v. 0.3)
+    tomcatWarDeployer (v. 0.3.1)
     Apache Tomcat 6/7 auto WAR deployment & launching tool
     Mariusz B. / MGeeky '16
 

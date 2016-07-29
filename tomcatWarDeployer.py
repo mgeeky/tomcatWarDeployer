@@ -45,7 +45,7 @@ import subprocess
 from BeautifulSoup import BeautifulSoup
 
 
-VERSION = '0.4'
+VERSION = '0.3.1'
 
 RECVSIZE = 8192
 
