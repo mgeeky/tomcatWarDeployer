@@ -609,6 +609,7 @@ def browseToManager(host, url, user, password):
 	cookiejar = mechanize.LWPCookieJar()
 	browser.set_cookiejar(cookiejar)
 	browser.set_handle_robots(False)
+        once = True
 
 	for suffix in tomcat_suffixes:
 		try:
@@ -628,7 +629,8 @@ def browseToManager(host, url, user, password):
 				logger.warning('Could not connect with "%s", connection refused.' % managerurl)
 			elif 'Error 401' in error or '403' in error:
 				logger.warning('Invalid credentials supplied for Apache Tomcat.')
-			else:
+			elif once:
+                                once = False
 				logger.warning('Browsing to the manager (%s) failed: \n\t%s' % (baseurl, e))
 				if ':' not in baseurl[baseurl.find('://')+3:]:
 					logger.warning('Did you forgot to specify service port in the host argument (host:port)?')
@@ -643,18 +645,12 @@ def generateRandomPassword(N=12):
 	return ''.join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(N))
 
 def options():
-	print '''
-	tomcatWarDeployer (v. %s)
-	Apache Tomcat 6/7 auto WAR deployment & launching tool
-	Mariusz B. / MGeeky '16
-
-Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
-	''' % VERSION
-
+	version_banner = 'tomcatWarDeployer (v. %s)' % VERSION
 	usage = '%prog [options] server\n\n  server\t\tSpecifies server address. Please also include port after colon.'
 	parser = optparse.OptionParser(usage=usage)
 
 	general = optparse.OptionGroup(parser, 'General options')
+	general.add_option('-V', '--version', dest='version', help='Version information.', action='store_true')
 	general.add_option('-v', '--verbose', dest='verbose', help='Verbose mode.', action='store_true')
 	general.add_option('-s', '--simulate', dest='simulate', help='Simulate breach only, do not perform any offensive actions.', action='store_true')
 	general.add_option('-G', '--generate', metavar='OUTFILE', dest='generate', help='Generate JSP backdoor only and put it into specified outfile path then exit. Do not perform any connections, scannings, deployment and so on.')
@@ -680,6 +676,18 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
 	parser.add_option_group(payload)
 
 	opts, args = parser.parse_args()
+
+        if opts.version:
+            print version_banner
+            sys.exit(0)
+
+	print '''
+        %s
+	Apache Tomcat 6/7 auto WAR deployment & launching tool
+	Mariusz B. / MGeeky '16
+
+Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
+	''' % version_banner
 
 	if opts.port:
 		try:
