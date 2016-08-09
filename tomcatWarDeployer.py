@@ -19,9 +19,6 @@ from __future__ import print_function
 #   On Linux instances the file can be found at:
 #       /usr/share/metasploit-framework/lib/msf/core/payload/jsp.rb
 #
-# Currently tested on:
-#  Apache Tomcat/7.0.52 (Ubuntu)
-#
 # Mariusz B. / MGeeky, '16
 #
 
@@ -45,7 +42,7 @@ import threading
 import subprocess
 
 
-VERSION = '0.3.1'
+VERSION = '0.3.2'
 
 RECVSIZE = 8192
 
