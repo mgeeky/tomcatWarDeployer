@@ -43,7 +43,6 @@ import tempfile
 import mechanize
 import threading
 import subprocess
-from BeautifulSoup import BeautifulSoup
 
 
 VERSION = '0.3.1'
