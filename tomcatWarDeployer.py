@@ -784,7 +784,7 @@ def options():
 
     print('''
         %s
-	Apache Tomcat 6/7 auto WAR deployment & launching tool
+	Apache Tomcat auto WAR deployment & launching tool
 	Mariusz B. / MGeeky '16
 
 Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
