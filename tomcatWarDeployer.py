@@ -528,8 +528,6 @@ def deployApplication(browser, url, appname, warpath, modify_action=False):
         else:
             action_url = url[:url.find('/', url.find('://') + 3)] in action
 
-        print('DEBUG1: action:(%s), url:(%s), action_url:(%s), action_function:(%s)' % (action, url, action_url, action_function))
-
         if action_url and action_function:
             browser.form = form
             if modify_action:
