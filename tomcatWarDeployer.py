@@ -45,7 +45,6 @@ import subprocess
 VERSION = '0.3.2'
 
 RECVSIZE = 8192
-
 SHELLEVENT = threading.Event()
 SHELLSTATUS = threading.Event()
 SHELLTHREADQUIT = False
@@ -543,12 +542,14 @@ def deployApplication(browser, url, appname, warpath, modify_action=False):
     for form in browser.forms():
         action = urllib.unquote_plus(form.action)
 
-        action_function = (('/upload?' in action) or ('/upload;' in action))
+        action_function = ('/upload' in action)
 
         if not modify_action:
             action_url = url in action
         else:
             action_url = url[:url.find('/', url.find('://') + 3)] in action
+
+        print('DEBUG1: action:(%s), url:(%s), action_url:(%s), action_function:(%s)' % (action, url, action_url, action_function))
 
         if action_url and action_function:
             browser.form = form
@@ -629,7 +630,23 @@ def validateManagerApplication(browser):
             if '/' + a + '?' in action or '/' + a + ';' in action:
                 found += 1
 
-    return (found >= len(actions) - 2)
+    if found > 0:
+        logger.debug('Found %d out of %d Tomcat Manager markers' % (found, len(actions)-2))
+        return (found >= len(actions) - 2)
+
+    # Maybe dealing with Tomcat/5.x which had links in <A> ?
+    for link in browser.links():
+        for a in actions:
+            action = urllib.unquote_plus(str(link))
+            if '/' + a + '?' in action or '/' + a + ';' in action:
+                found += 1
+
+    if found > 0:
+        logger.info('Most likely dealing with Tomcat 5')
+        logger.debug('Found %d out of %d Tomcat Manager markers' % (found, len(actions)-2))
+        return (found >= len(actions) - 2)
+
+    return False
 
 
 def constructBaseUrl(host, url):
@@ -654,7 +671,7 @@ def browseToManager(host, url, user, password):
     baseurl = constructBaseUrl(host, url)
     managerurl = ''
 
-    tomcat_suffixes = ['', 'manager', 'manager/html', 'html']
+    tomcat_suffixes = ['', 'manager', 'manager/html']
     error = None
     reached = False
 
@@ -672,6 +689,11 @@ def browseToManager(host, url, user, password):
             logger.debug('Trying to fetch: "%s"' % managerurl)
             browser.add_password(managerurl, user, password)
             page = browser.open(managerurl)
+
+            data = page.read()
+            m = re.search('Apache Tomcat/([^<]+)', data)
+            if m:
+                logger.info('Probably found something: Apache Tomcat/%s' % m.group(1))
 
             if validateManagerApplication(browser):
                 logger.debug(
