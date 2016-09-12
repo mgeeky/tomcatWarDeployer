@@ -631,7 +631,6 @@ def validateManagerApplication(browser):
                 found += 1
 
     if found > 0:
-        logger.debug('Found %d out of %d Tomcat Manager markers' % (found, len(actions)-2))
         return (found >= len(actions) - 2)
 
     # Maybe dealing with Tomcat/5.x which had links in <A> ?
@@ -642,8 +641,7 @@ def validateManagerApplication(browser):
                 found += 1
 
     if found > 0:
-        logger.info('Most likely dealing with Tomcat 5')
-        logger.debug('Found %d out of %d Tomcat Manager markers' % (found, len(actions)-2))
+        logger.debug('Fallback strategy shown we might be dealing with Tomcat 5')
         return (found >= len(actions) - 2)
 
     return False
@@ -693,11 +691,12 @@ def browseToManager(host, url, user, password):
             data = page.read()
             m = re.search('Apache Tomcat/([^<]+)', data)
             if m:
-                logger.info('Probably found something: Apache Tomcat/%s' % m.group(1))
+                logger.debug('Probably found something: Apache Tomcat/%s' % m.group(1))
+                tomcatVersion = m.group(1)
 
-            if validateManagerApplication(browser):
+            if validateManagerApplication(browser) and tomcatVersion:
                 logger.debug(
-                    'Apache Tomcat Manager Application reached & validated.')
+                    'Apache Tomcat/%s Manager Application reached & validated.' % (tomcatVersion))
                 reached = True
                 break
 
