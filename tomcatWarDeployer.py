@@ -622,7 +622,8 @@ def validateManagerApplication(browser):
 def constructBaseUrl(host, url):
     host = host if host.startswith('http') else 'http://' + host
     uri = url[1:] if url.startswith('/') else url
-    return os.path.join(host, uri)
+    # return os.path.join(host, uri)
+    return host + "/" + uri
 
 def extractHostAddress(hostn, url):
     host = constructBaseUrl(hostn, url)
