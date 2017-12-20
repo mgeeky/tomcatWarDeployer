@@ -25,6 +25,7 @@ from __future__ import print_function
 import re
 import os
 import sys
+import ssl
 import time
 import random
 import string
@@ -41,13 +42,14 @@ import mechanize
 import threading
 import subprocess
 
-
-VERSION = '0.3.3'
+VERSION = '0.3.4'
 
 RECVSIZE = 8192
 SHELLEVENT = threading.Event()
 SHELLSTATUS = threading.Event()
 SHELLTHREADQUIT = False
+
+PROTO = 'http'
 
 # Logger configuration
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
@@ -58,6 +60,9 @@ logging.addLevelName(
 logging.addLevelName(
     logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
 logger = logging.getLogger()
+
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 class MissingDependencyError(Exception):
     pass
@@ -573,7 +578,7 @@ def checkIsDeployed(browser, url, appname):
     return False
 
 def unloadApplication(browser, url, appname):
-    appurl = 'http://%s/%s/' % (url, appname)
+    appurl = '%s://%s/%s/' % (PROTO, url, appname)
     logger.debug('Unloading application: "%s"' % appurl)
     for form in browser.forms():
         action = urllib.unquote_plus(form.action)
@@ -620,7 +625,7 @@ def validateManagerApplication(browser):
     return False
 
 def constructBaseUrl(host, url):
-    host = host if host.startswith('http') else 'http://' + host
+    host = host if host.startswith('http') else PROTO + '://' + host
     uri = url[1:] if url.startswith('/') else url
     return os.path.join(host, uri)
 

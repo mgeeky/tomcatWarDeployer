@@ -13,7 +13,7 @@ Here goes the help:
 ```
 user$ python tomcatWarDeployer.py --help
 
-    tomcatWarDeployer (v. 0.3.3)
+    tomcatWarDeployer (v. 0.3.4)
     Apache Tomcat auto WAR deployment & launching tool
     Mariusz B. / MGeeky '16
 
@@ -169,6 +169,7 @@ That would be all I guess.
 ### CHANGELOG
 * 19.07.16: Version 0.3: Added bind-shell & Reverse-shell functionality to provide user with direct access to the shell.
 * 12.09.16: Version 0.3.3: Added support for Tomcat 5 interface
+* 21.12.17: Quick fix for the http/https issue and avoiding SSL certificate validation.
 
 
 ### TODO
