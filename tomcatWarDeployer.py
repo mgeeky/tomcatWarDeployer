@@ -19,7 +19,7 @@ from __future__ import print_function
 #   On Linux instances the file can be found at:
 #       /usr/share/metasploit-framework/lib/msf/core/payload/jsp.rb
 #
-# Mariusz B. / MGeeky, '16
+# Mariusz B. / MGeeky, '16-18
 #
 
 import re
