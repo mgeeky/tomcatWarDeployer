@@ -828,7 +828,6 @@ def main():
         ('j2deployer', 'j2deployer'),
         ('ovwebusr', 'OvW*busr1'),
         ('vcx', 'vcx'),
-
     )
 
     if not opts.generate:
@@ -848,7 +847,7 @@ def main():
         else:
             try:
                 browser, url = browseToManager(
-                    args[0], opts.url, user, password)
+                    args[0], opts.url, opts.user, opts.password)
             except KeyboardInterrupt:
                 logger.info(
                     "User has interrupted while browsing to Apache Manager.")
