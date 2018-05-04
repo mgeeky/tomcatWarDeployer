@@ -162,20 +162,21 @@ That would be all I guess.
 
 ### TESTED
 * Apache Tomcat/5.5.35
-* Apache Tomcat/7.0.52
 * Apache Tomcat/6.?
+* Apache Tomcat/7.0.52
+* Apache Tomcat/8.0.33
 
 
 ### CHANGELOG
 * 19.07.16: Version 0.3: Added bind-shell & Reverse-shell functionality to provide user with direct access to the shell.
 * 12.09.16: Version 0.3.3: Added support for Tomcat 5 interface
 * 21.12.17: Quick fix for the http/https issue and avoiding SSL certificate validation.
+* 04.05.18: Enhanced a bit web interface, added colors to shell prompt and improved support for Windows shell loop.
 
 
 ### TODO
-
 * ~~Implement bind & reverse tcp payload functionality as well as some pty to interact with it~~
 * ~~Finish implementing noconnect and connect functionality~~
 * Implement sort of communication authentication and encryption/encoding, to prevent flow of plain-text data through the wire/ether
-* Test it on ~~tomcat5~~, tomcat8
+* Test it on ~~tomcat5~~, ~~tomcat8~~
 
