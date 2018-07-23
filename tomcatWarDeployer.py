@@ -912,6 +912,9 @@ def main():
             try:
                 browser, url = browseToManager(
                     args[0], opts.url, opts.user, opts.password)
+		if browser == 403 and url == 403:
+                    browser = url = None
+
             except KeyboardInterrupt:
                 logger.info(
                     "User has interrupted while browsing to Apache Manager.")
