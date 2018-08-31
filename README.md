@@ -173,7 +173,7 @@ That would be all I guess.
 * 12.09.16: Version 0.3.3: Added support for Tomcat 5 interface
 * 21.12.17: Quick fix for the http/https issue and avoiding SSL certificate validation.
 * 04.05.18: Enhanced a bit web interface, added colors to shell prompt and improved support for Windows shell loop.
-* 31.08.18: Added support for CSRF and JSESSIONID handling in Tomcat 7+ versions and for CVE-2007-1860.
+* 31.08.18: Added support for CSRF and JSESSIONID handling in Tomcat 7+ versions and for CVE-2007-1860 - you can check how it works automatically out-of-the-box on [PentesterLab](https://pentesterlab.com/exercises/cve-2007-1860)
 
 
 ### TODO
