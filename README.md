@@ -13,7 +13,7 @@ Here goes the help:
 ```
 user$ python tomcatWarDeployer.py --help
 
-    tomcatWarDeployer (v. 0.3.4)
+    tomcatWarDeployer (v. 0.5)
     Apache Tomcat auto WAR deployment & launching tool
     Mariusz B. / MGeeky '16
 
@@ -164,6 +164,7 @@ That would be all I guess.
 * Apache Tomcat/5.5.35
 * Apache Tomcat/6.?
 * Apache Tomcat/7.0.52
+* Apache Tomcat/7.0.56
 * Apache Tomcat/8.0.33
 
 
@@ -172,6 +173,7 @@ That would be all I guess.
 * 12.09.16: Version 0.3.3: Added support for Tomcat 5 interface
 * 21.12.17: Quick fix for the http/https issue and avoiding SSL certificate validation.
 * 04.05.18: Enhanced a bit web interface, added colors to shell prompt and improved support for Windows shell loop.
+* 31.08.18: Added support for CSRF and JSESSIONID handling in Tomcat 7+ versions and for CVE-2007-1860.
 
 
 ### TODO
