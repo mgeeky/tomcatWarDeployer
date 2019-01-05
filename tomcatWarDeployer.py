@@ -710,8 +710,11 @@ def unloadApplication(browser, url, appname, addJsessionId = False):
             if MANAGER_URL not in form.action:
                 new_action  = '{}{}'.format(MANAGER_URL, form.action[form.action.index('/undeploy'):])
 
-            if INSERT_JSESSIONID:
+            elif INSERT_JSESSIONID:
                 new_action = new_action.replace('/undeploy?', '/undeploy;{}?'.format(INSERT_JSESSIONID))
+
+            else:
+                new_action = form.action
 
             browser.form.action = new_action
             if addJsessionId:
@@ -734,7 +737,7 @@ def unloadApplication(browser, url, appname, addJsessionId = False):
 
             try:
                 resp = browser.open(appurl)
-            except urllib2.HTTPError, e:
+            except (urllib2.HTTPError, urllib2.URLError) as e:
                 if e.code == 404:
                     return True
 
