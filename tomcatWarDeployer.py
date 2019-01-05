@@ -35,7 +35,6 @@ import socket
 import urllib
 import urllib2
 import logging
-import commands
 import optparse
 import tempfile
 import mechanize
@@ -93,6 +92,9 @@ def webPathJoin(_dir, _file):
     elif _dir.endswith('/'):
         return webPathJoin(_dir[:-1], _file)
     return _dir + '/' + _file
+
+def execcmd(cmd):
+    return subprocess.check_output(cmd, shell=True).strip()
     
 def issueCommand(sock, cmd, isWindows):
     if isWindows:
@@ -280,7 +282,7 @@ def generateWAR(code, title, appname):
     with open(dirpath + '/index.jsp', 'w') as f:
         f.write(code)
 
-    javaver = commands.getstatusoutput('java -version')[1]
+    javaver = execcmd('java -version')
     m = re.search('version "([^"]+)"', javaver)
     if m:
         javaver = m.group(1)
@@ -339,15 +341,25 @@ Created-By: %s (Sun Microsystems Inc.)
             if os.path.exists(os.path.join(path, target)):
                 jarpath = os.path.join(path, target)
 
+        # Try last resort effort to find either jar:
+        for cmd in ('where', 'whereis', 'locate'):
+            fullcmd = cmd + ' jar'
+            wherejar = execcmd(fullcmd)
+            logger.debug('Trying really hard to find "jar": Command [%s] yielded: "%s"' % (fullcmd, wherejar))
+            if wherejar and os.path.exists(wherejar):
+                jarpath = wherejar
+                logger.debug('I think I\'ve found jar at: "%s"' % jarpath)
+                break
+
         if not jarpath:
             logger.debug('jar or fastjar command not found')
             raise MissingDependencyError
 
-    packing = commands.getstatusoutput('"%s" -cvf %s *' % (jarpath, outpath))
+    packing = execcmd('"%s" -cvf %s *' % (jarpath, outpath))
     os.chdir(cwd)
-    logger.debug(packing[1])
+    logger.debug(packing)
 
-    tree = commands.getstatusoutput('tree %s' % dirpath)[1]
+    tree = execcmd('tree %s' % dirpath)
     if not ('sh' in tree and 'tree: not found' in tree):
         logger.debug('WAR file structure:')
         logger.debug(tree)
@@ -737,7 +749,9 @@ def unloadApplication(browser, url, appname, addJsessionId = False):
 
             try:
                 resp = browser.open(appurl)
-            except (urllib2.HTTPError, urllib2.URLError) as e:
+            except urllib2.URLError as e:
+                return True
+            except urllib2.HTTPError as e:
                 if e.code == 404:
                     return True
 
