@@ -95,7 +95,7 @@ def webPathJoin(_dir, _file):
 
 def execcmd(cmd):
     try:
-        return subprocess.check_output(cmd, shell=True).strip()
+        return subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).strip()
     except subprocess.CalledProcessError as e:
         if cmd.startswith('tree'):
             logger.debug('Tree command not available. Skipping.')
