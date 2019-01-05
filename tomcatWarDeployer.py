@@ -94,7 +94,14 @@ def webPathJoin(_dir, _file):
     return _dir + '/' + _file
 
 def execcmd(cmd):
-    return subprocess.check_output(cmd, shell=True).strip()
+    try:
+        return subprocess.check_output(cmd, shell=True).strip()
+    except subprocess.CalledProcessError as e:
+        if cmd.startswith('tree'):
+            logger.debug('Tree command not available. Skipping.')
+        else:
+            logger.error("Executing '%s' returned: '%s'" % (cmd, str(e)))
+    return ""
     
 def issueCommand(sock, cmd, isWindows):
     if isWindows:
@@ -283,7 +290,7 @@ def generateWAR(code, title, appname):
         f.write(code)
 
     javaver = execcmd('java -version')
-    m = re.search('version "([^"]+)"', javaver)
+    m = re.search('version "([^"]+)"', javaver, re.M|re.I)
     if m:
         javaver = m.group(1)
         logger.debug('Working with Java at version: %s' % javaver)
