@@ -41,7 +41,7 @@ import mechanize
 import threading
 import subprocess
 
-VERSION = '0.5'
+VERSION = '0.5.1'
 
 RECVSIZE = 8192
 SHELLEVENT = threading.Event()
