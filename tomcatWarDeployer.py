@@ -103,7 +103,7 @@ def execcmd(cmd):
             logger.error("Executing '%s' returned: '%s'" % (cmd, str(e)))
     return ""
     
-def issueCommand(sock, cmd, isWindows):
+def issueCommand(sock, cmd, isWindows, path = ''):
     if isWindows:
         cmd = cmd + '\r\n'
     else:
@@ -120,11 +120,16 @@ def issueCommand(sock, cmd, isWindows):
             and re.match(r'[A-Z]\:(?:\\[^>]+)>', lines[-1]):
             res = '\r\n'.join(lines[:-2])
 
+        lines = res.split('\r\n')
+        if lines[-1].strip() == path:
+            res = '\r\n'.join(lines[:-1]).strip()
+
     return res
 
 def shellLoop(sock, host):
     isWindows = False
     initialRecv = ''
+    path = ''
     try:
         try:
             sock.settimeout(1.0)
@@ -138,8 +143,8 @@ def shellLoop(sock, host):
             path = lines[-1]
             isWindows = True
 
-        whoami = issueCommand(sock, 'whoami', isWindows)
-        hostname = issueCommand(sock, 'hostname', isWindows)
+        whoami = issueCommand(sock, 'whoami', isWindows, path)
+        hostname = issueCommand(sock, 'hostname', isWindows, path)
 
     except (socket.gaierror, socket.error) as e:
         logger.error(
@@ -170,7 +175,7 @@ def shellLoop(sock, host):
             if command.lower() == 'exit' or command.lower() == 'quit':
                 break
 
-            res = issueCommand(sock, command, isWindows)
+            res = issueCommand(sock, command, isWindows, path)
 
             if not len(res) and len(command):
                 if sock:
