@@ -6,6 +6,8 @@ This is a penetration testing tool intended to leverage Apache Tomcat credential
 
 In practice, it generates JSP backdoor WAR package on-the-fly and deploys it at the Apache Tomcat Manager Application, using valid HTTP Authentication credentials that pentester provided (or custom ones, in the end, we all love *tomcat:tomcat* ). 
 
+The tool offers couple of handy features - like manager's panel lookup logic, support for CVE-2007-1860 double encoding issue, CSRF handling in newer Tomcat's.
+
 ### Usage
 As simple as providing server's address with port, as a IP:PORT pair. 
 Here goes the help:
