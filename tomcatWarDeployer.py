@@ -41,7 +41,7 @@ import mechanize
 import threading
 import subprocess
 
-VERSION = '0.5.1'
+VERSION = '0.5.2'
 
 RECVSIZE = 8192
 SHELLEVENT = threading.Event()
@@ -1032,6 +1032,9 @@ def main():
         ('', ''),
     )
 
+    browser = None
+    url = None
+
     if not opts.generate:
         url = ''
         if opts.user == '' and opts.password == '':
@@ -1060,9 +1063,9 @@ def main():
                     "User has interrupted while browsing to Apache Manager.")
                 return
 
-        if browser == None:
-            logger.error('Service not found or could not authenticate to it.')
-            return
+    if browser == None or url == None:
+        logger.error('Service not found or could not authenticate to it.')
+        return
 
     try:
         appname = opts.appname
