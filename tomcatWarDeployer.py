@@ -1050,6 +1050,9 @@ def main():
         with open(opts.generate + ".jsp", 'w') as f:
             f.write(code)
 
+        logging.info(
+            'JSP WAR backdoor\'s code has been generated and stored at: "%s.jsp"' % opts.generate)
+
         return
 
     if not opts.generate:
