@@ -184,3 +184,20 @@ That would be all I guess.
 * Implement sort of communication authentication and encryption/encoding, to prevent flow of plain-text data through the wire/ether
 * Test it on ~~tomcat5~~, ~~tomcat8~~
 
+
+---
+
+### ☕ Show Support ☕
+
+This and other projects are outcome of sleepless nights and **plenty of hard work**. If you like what I do and appreciate that I always give back to the community,
+[Consider buying me a coffee](https://github.com/sponsors/mgeeky) _(or better a beer)_ just to say thank you! 💪 
+
+---
+
+### Author
+
+```   
+   Mariusz B. / mgeeky, 21
+   <mb [at] binary-offensive.com>
+   (https://github.com/mgeeky)
+```
