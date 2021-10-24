@@ -17,7 +17,7 @@ user$ python tomcatWarDeployer.py --help
 
     tomcatWarDeployer (v. 0.5)
     Apache Tomcat auto WAR deployment & launching tool
-    Mariusz B. / MGeeky '16
+    Mariusz Banach / MGeeky '16
 
 Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
     
@@ -92,7 +92,7 @@ user$ python tomcatWarDeployer.py -v -x -p 4449 -H 192.168.56.102 192.168.56.100
 
     tomcatWarDeployer (v. 0.3)
     Apache Tomcat 6/7 auto WAR deployment & launching tool
-    Mariusz B. / MGeeky '16
+    Mariusz Banach / MGeeky '16
 
 Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
     
@@ -197,7 +197,7 @@ This and other projects are outcome of sleepless nights and **plenty of hard wor
 ### Author
 
 ```   
-   Mariusz B. / mgeeky, 21
+   Mariusz Banach / mgeeky, 21
    <mb [at] binary-offensive.com>
    (https://github.com/mgeeky)
 ```

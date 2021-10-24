@@ -19,7 +19,7 @@ from __future__ import print_function
 #   On Linux instances the file can be found at:
 #       /usr/share/metasploit-framework/lib/msf/core/payload/jsp.rb
 #
-# Mariusz B. / MGeeky, '16-19
+# Mariusz Banach / MGeeky, '16-19
 #
 
 import re
@@ -959,7 +959,7 @@ def options():
     print('''
         %s
 	Apache Tomcat auto WAR deployment & launching tool
-	Mariusz B. / MGeeky '16-18
+	Mariusz Banach / MGeeky '16-18
 
 Penetration Testing utility aiming at presenting danger of leaving Tomcat misconfigured.
 	''' % version_banner)
